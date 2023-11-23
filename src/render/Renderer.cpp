@@ -238,6 +238,21 @@ void CHyprRenderer::renderWorkspaceWindowsFullscreen(CMonitor* pMonitor, CWorksp
 
         renderWindow(w.get(), pMonitor, time, true, RENDER_PASS_ALL);
     }
+
+    // pinned always above
+    for (auto& w : g_pCompositor->m_vWindows) {
+        if (w->isHidden() && !w->m_bIsMapped && !w->m_bFadingOut)
+            continue;
+
+        if (!w->m_bPinned || !w->m_bIsFloating)
+            continue;
+
+        if (!shouldRenderWindow(w.get(), pMonitor, pWorkspace))
+            continue;
+
+        // render the bad boy
+        renderWindow(w.get(), pMonitor, time, true, RENDER_PASS_ALL);
+    }
 }
 
 void CHyprRenderer::renderWorkspaceWindows(CMonitor* pMonitor, CWorkspace* pWorkspace, timespec* time) {
@@ -302,9 +317,6 @@ void CHyprRenderer::renderWorkspaceWindows(CMonitor* pMonitor, CWorkspace* pWork
             continue;
 
         if (!shouldRenderWindow(w.get(), pMonitor, pWorkspace))
-            continue;
-
-        if (pWorkspace->m_bIsSpecialWorkspace && w->m_iWorkspaceID != pWorkspace->m_iID)
             continue;
 
         // render the bad boy
@@ -675,24 +687,6 @@ void CHyprRenderer::renderAllClientsForWorkspace(CMonitor* pMonitor, CWorkspace*
             continue;
 
         if (!g_pCompositor->isWorkspaceSpecial(w->m_iWorkspaceID))
-            continue;
-
-        if (!shouldRenderWindow(w.get(), pMonitor, pWorkspace))
-            continue;
-
-        // render the bad boy
-        renderWindow(w.get(), pMonitor, time, true, RENDER_PASS_ALL);
-    }
-
-    // pinned always above
-    for (auto& w : g_pCompositor->m_vWindows) {
-        if (w->isHidden() && !w->m_bIsMapped && !w->m_bFadingOut)
-            continue;
-
-        if (!w->m_bPinned || !w->m_bIsFloating)
-            continue;
-
-        if (g_pCompositor->isWorkspaceSpecial(w->m_iWorkspaceID))
             continue;
 
         if (!shouldRenderWindow(w.get(), pMonitor, pWorkspace))
