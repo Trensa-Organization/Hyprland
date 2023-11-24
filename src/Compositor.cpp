@@ -519,15 +519,14 @@ void CCompositor::startCompositor() {
 
     signal(SIGPIPE, SIG_IGN);
 
-    if (m_sWLRSession /* Session-less Hyprland usually means a nest, don't update the env in that case */ && fork() == 0)
-        execl(
-            "/bin/sh", "/bin/sh", "-c",
+    if (m_sWLRSession /* Session-less Hyprland usually means a nest, don't update the env in that case */) {
+        const auto CMD =
 #ifdef USES_SYSTEMD
             "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && hash dbus-update-activation-environment 2>/dev/null && "
 #endif
-            "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE",
-            nullptr);
-
+            "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE";
+        g_pKeybindManager->spawn(CMD);
+    }
     Debug::log(LOG, "Running on WAYLAND_DISPLAY: {}", m_szWLDisplaySocket);
 
     if (!wlr_backend_start(m_sWLRBackend)) {
@@ -1122,6 +1121,21 @@ CWindow* CCompositor::getWindowFromHandle(uint32_t handle) {
         }
     }
 
+    return nullptr;
+}
+
+SIMEPopup* CCompositor::vectorToIMEPopup(const Vector2D& pos, std::list<SIMEPopup>* popups) {
+    for (auto& popup : *popups) {
+        auto surface = popup.pSurface->surface;
+        CBox box{
+            popup.realX,
+            popup.realY,
+            surface->current.width,
+            surface->current.height,
+        };
+        if (box.containsPoint(pos))
+            return &popup;
+    }
     return nullptr;
 }
 

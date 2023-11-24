@@ -641,11 +641,6 @@ void CKeybindManager::spawn(std::string args) {
         args  = args.substr(args.find_first_of(']') + 1);
     }
 
-    if (g_pXWaylandManager->m_sWLRXWayland)
-        args = "WAYLAND_DISPLAY=" + std::string(g_pCompositor->m_szWLDisplaySocket) + " DISPLAY=" + std::string(g_pXWaylandManager->m_sWLRXWayland->display_name) + " " + args;
-    else
-        args = "WAYLAND_DISPLAY=" + std::string(g_pCompositor->m_szWLDisplaySocket) + " " + args;
-
     const uint64_t PROC = spawnRaw(args);
 
     if (!RULES.empty()) {
@@ -735,11 +730,10 @@ void CKeybindManager::clearKeybinds() {
 void CKeybindManager::toggleActiveFloating(std::string args) {
     CWindow* PWINDOW = nullptr;
 
-    if (args != "" && args != "active" && args.length() > 1) {
+    if (args != "" && args != "active" && args.length() > 1)
         PWINDOW = g_pCompositor->getWindowByRegex(args);
-    } else {
+      else
         PWINDOW = g_pCompositor->m_pLastWindow;
-    }
 
     if (!PWINDOW)
         return;

@@ -101,8 +101,7 @@ int main(int argc, char** argv) {
 
     g_pCompositor->initServer();
 
-    if (!getenv("HYPRLAND_NO_RT") || configStringToInt(std::string(getenv("HYPRLAND_NO_RT"))) == 0)
-        Init::gainRealTime();
+    Init::gainRealTime();
 
     Debug::log(LOG, "Hyprland init finished.");
 
