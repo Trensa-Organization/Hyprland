@@ -57,12 +57,12 @@ ExternalProject_Add(
     wlroots
     PREFIX ${CMAKE_SOURCE_DIR}/subprojects/wlroots
     SOURCE_DIR ${CMAKE_SOURCE_DIR}/subprojects/wlroots
-    PATCH_COMMAND sed -E -i -e "s/(soversion = 12)([^032]|$$)/soversion = 12032/g" meson.build
+    PATCH_COMMAND sed -E -i -e "s/(soversion = 13)([^032]|$$)/soversion = 13032/g" meson.build
     CONFIGURE_COMMAND meson setup build --buildtype=${BUILDTYPE_LOWER} -Dwerror=false -Dexamples=false -Drenderers=gles2 $<IF:$<BOOL:${WITH_ASAN}>,-Db_sanitize=address,-Db_sanitize=none> && meson setup build --buildtype=${BUILDTYPE_LOWER} -Dwerror=false -Dexamples=false -Drenderers=gles2 $<IF:$<BOOL:${WITH_ASAN}>,-Db_sanitize=address,-Db_sanitize=none> --reconfigure
     BUILD_COMMAND ninja -C build
     BUILD_ALWAYS true
     BUILD_IN_SOURCE true
-    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/subprojects/wlroots/build/libwlroots.so.12032
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/subprojects/wlroots/build/libwlroots.so.13032
     INSTALL_COMMAND echo "wlroots: install not needed"
 )
 
@@ -222,7 +222,7 @@ function(protocol protoPath protoName external)
 endfunction()
 
 target_link_libraries(Hyprland
-        ${CMAKE_SOURCE_DIR}/subprojects/wlroots/build/libwlroots.so.12032 # wlroots is provided by us
+        ${CMAKE_SOURCE_DIR}/subprojects/wlroots/build/libwlroots.so.13032 # wlroots is provided by us
         OpenGL::EGL
         OpenGL::GL
         Threads::Threads
