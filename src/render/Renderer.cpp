@@ -298,7 +298,7 @@ void CHyprRenderer::renderWorkspaceWindows(CMonitor* pMonitor, CWorkspace* pWork
         if (g_pCompositor->isWorkspaceSpecial(w->m_iWorkspaceID))
             continue; // special are in the third pass
 
-        if (pWorkspace->m_bIsSpecialWorkspace && w->m_iWorkspaceID != pWorkspace->m_iID)
+        if (w->m_iMonitorID == pWorkspace->m_iMonitorID && g_pCompositor->isWorkspaceSpecial(w->m_iWorkspaceID) && !pWorkspace->m_bIsSpecialWorkspace)
             continue;
 
         if (!shouldRenderWindow(w.get(), pMonitor, pWorkspace))
