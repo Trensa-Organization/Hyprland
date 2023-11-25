@@ -189,7 +189,7 @@ void CConfigManager::setDefaultVars() {
     configValues["dwindle:force_split"].intValue                  = 0;
     configValues["dwindle:permanent_direction_override"].intValue = 0;
     configValues["dwindle:preserve_split"].intValue               = 0;
-    configValues["dwindle:special_scale_factor"].floatValue       = 0.8f;
+    configValues["dwindle:special_scale_factor"].floatValue       = 1.f;
     configValues["dwindle:split_width_multiplier"].floatValue     = 1.0f;
     configValues["dwindle:no_gaps_when_only"].intValue            = 0;
     configValues["dwindle:use_active_for_splits"].intValue        = 1;
@@ -197,7 +197,7 @@ void CConfigManager::setDefaultVars() {
     configValues["dwindle:smart_split"].intValue                  = 0;
     configValues["dwindle:smart_resizing"].intValue               = 1;
 
-    configValues["master:special_scale_factor"].floatValue = 0.8f;
+    configValues["master:special_scale_factor"].floatValue = 1.f;
     configValues["master:mfact"].floatValue                = 0.55f;
     configValues["master:new_is_master"].intValue          = 1;
     configValues["master:always_center_master"].intValue   = 0;
@@ -209,7 +209,8 @@ void CConfigManager::setDefaultVars() {
     configValues["master:smart_resizing"].intValue         = 1;
     configValues["master:drop_at_cursor"].intValue         = 1;
 
-    configValues["animations:enabled"].intValue = 1;
+    configValues["animations:enabled"].intValue                = 1;
+    configValues["animations:first_launch_animation"].intValue = 1;
 
     configValues["input:follow_mouse"].intValue                     = 1;
     configValues["input:mouse_refocus"].intValue                    = 1;
