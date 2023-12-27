@@ -6,13 +6,7 @@ bool CFramebuffer::alloc(int w, int h, uint32_t drmFormat) {
     RASSERT((w > 1 && h > 1), "cannot alloc a FB with negative / zero size! (attempted {}x{})", w, h);
 
     uint32_t glFormat = drmFormatToGL(drmFormat);
-    uint32_t glType   = glFormat != GL_RGBA ?
-#ifdef GLES2
-        GL_UNSIGNED_INT_2_10_10_10_REV_EXT :
-#else
-        GL_UNSIGNED_INT_2_10_10_10_REV :
-#endif
-        GL_UNSIGNED_BYTE;
+    uint32_t glType   = glFormatToType(glFormat);
 
     if (m_iFb == (uint32_t)-1) {
         firstAlloc = true;
@@ -60,6 +54,24 @@ bool CFramebuffer::alloc(int w, int h, uint32_t drmFormat) {
     m_vSize = Vector2D(w, h);
 
     return true;
+}
+
+void CFramebuffer::addStencil() {
+    // TODO: Allow this with gles2
+#ifndef GLES2
+    glBindTexture(GL_TEXTURE_2D, m_pStencilTex->m_iTexID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, m_vSize.x, m_vSize.y, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, 0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, m_iFb);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, m_pStencilTex->m_iTexID, 0);
+
+    auto status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    RASSERT((status == GL_FRAMEBUFFER_COMPLETE), "Failed adding a stencil to fbo!", status);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, g_pHyprOpenGL->m_iCurrentOutputFb);
+#endif
 }
 
 void CFramebuffer::bind() {

@@ -12,7 +12,7 @@
       host = "gitlab.freedesktop.org";
       owner = "wlroots";
       repo = "wlroots";
-      rev = "5de9e1a99d6642c2d09d589aa37ff0a8945dcee1";
+      rev = "5d639394f3e83b01596dcd166a44a9a1a2583350";
       flake = false;
     };
 
@@ -65,7 +65,6 @@
         hyprland
         hyprland-unwrapped
         hyprland-debug
-        hyprland-nvidia
         # hyprland-extras
         xdg-desktop-portal-hyprland
         # dependencies

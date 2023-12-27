@@ -210,7 +210,8 @@ void CScreencopyProtocolManager::captureOutput(wl_client* client, wl_resource* r
     PFRAME->client = PCLIENT;
     PCLIENT->ref++;
 
-    PFRAME->shmFormat = wlr_output_preferred_read_format(PFRAME->pMonitor->output);
+    g_pHyprRenderer->makeEGLCurrent();
+    PFRAME->shmFormat = g_pHyprOpenGL->getPreferredReadFormat(PFRAME->pMonitor);
     if (PFRAME->shmFormat == DRM_FORMAT_INVALID) {
         Debug::log(ERR, "No format supported by renderer in capture output");
         zwlr_screencopy_frame_v1_send_failed(PFRAME->resource);
@@ -241,7 +242,7 @@ void CScreencopyProtocolManager::captureOutput(wl_client* client, wl_resource* r
     wlr_output_effective_resolution(PFRAME->pMonitor->output, &ow, &oh);
     PFRAME->box.transform(PFRAME->pMonitor->transform, ow, oh).scale(PFRAME->pMonitor->scale).round();
 
-    PFRAME->shmStride = (PSHMINFO->bpp / 8) * PFRAME->box.width;
+    PFRAME->shmStride = pixel_format_info_min_stride(PSHMINFO, PFRAME->box.w);
 
     zwlr_screencopy_frame_v1_send_buffer(PFRAME->resource, convert_drm_format_to_wl_shm(PFRAME->shmFormat), PFRAME->box.width, PFRAME->box.height, PFRAME->shmStride);
 
@@ -424,23 +425,76 @@ void CScreencopyProtocolManager::sendFrameDamage(SScreencopyFrame* frame) {
 }
 
 bool CScreencopyProtocolManager::copyFrameShm(SScreencopyFrame* frame, timespec* now) {
+    wlr_texture* sourceTex = wlr_texture_from_buffer(g_pCompositor->m_sWLRRenderer, m_pLastMonitorBackBuffer);
+    if (!sourceTex)
+        return false;
+
     void*    data;
     uint32_t format;
     size_t   stride;
-    if (!wlr_buffer_begin_data_ptr_access(frame->buffer, WLR_BUFFER_DATA_PTR_ACCESS_WRITE, &data, &format, &stride))
+    if (!wlr_buffer_begin_data_ptr_access(frame->buffer, WLR_BUFFER_DATA_PTR_ACCESS_WRITE, &data, &format, &stride)) {
+        wlr_texture_destroy(sourceTex);
         return false;
+    }
 
-    if (!wlr_renderer_begin_with_buffer(g_pCompositor->m_sWLRRenderer, m_pLastMonitorBackBuffer)) {
-        Debug::log(ERR, "[sc] shm: Client requested a copy to a buffer that failed to pass wlr_renderer_begin_with_buffer");
+    CRegion fakeDamage = {0, 0, INT16_MAX, INT16_MAX};
+
+    g_pHyprRenderer->makeEGLCurrent();
+
+    CFramebuffer fb;
+    fb.alloc(frame->box.w, frame->box.h, g_pHyprRenderer->isNvidia() ? DRM_FORMAT_XBGR8888 : frame->pMonitor->drmFormat);
+
+    if (!g_pHyprRenderer->beginRender(frame->pMonitor, fakeDamage, RENDER_MODE_FULL_FAKE, nullptr, &fb)) {
+        wlr_texture_destroy(sourceTex);
         wlr_buffer_end_data_ptr_access(frame->buffer);
         return false;
     }
 
-    bool success = wlr_renderer_read_pixels(g_pCompositor->m_sWLRRenderer, format, stride, frame->box.width, frame->box.height, frame->box.x, frame->box.y, 0, 0, data);
-    wlr_renderer_end(g_pCompositor->m_sWLRRenderer);
-    wlr_buffer_end_data_ptr_access(frame->buffer);
+    CBox monbox = CBox{0, 0, frame->pMonitor->vecTransformedSize.x, frame->pMonitor->vecTransformedSize.y}.translate({-frame->box.x, -frame->box.y});
+    g_pHyprOpenGL->setMonitorTransformEnabled(false);
+    g_pHyprOpenGL->renderTexture(sourceTex, &monbox, 1);
+    g_pHyprOpenGL->setMonitorTransformEnabled(true);
 
-    return success;
+#ifndef GLES2
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb.m_iFb);
+#else
+    glBindFramebuffer(GL_FRAMEBUFFER, fb.m_iFb);
+#endif
+
+    const auto PFORMAT = g_pHyprOpenGL->getPixelFormatFromDRM(format);
+    if (!PFORMAT) {
+        g_pHyprRenderer->endRender();
+        wlr_texture_destroy(sourceTex);
+        wlr_buffer_end_data_ptr_access(frame->buffer);
+        return false;
+    }
+
+    g_pHyprRenderer->endRender();
+
+    g_pHyprRenderer->makeEGLCurrent();
+    g_pHyprOpenGL->m_RenderData.pMonitor = frame->pMonitor;
+    fb.bind();
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+    const wlr_pixel_format_info* drmFmtWlr  = drm_get_pixel_format_info(format);
+    uint32_t                     packStride = pixel_format_info_min_stride(drmFmtWlr, frame->box.w);
+
+    if (packStride == stride) {
+        glReadPixels(0, 0, frame->box.w, frame->box.h, PFORMAT->glFormat, PFORMAT->glType, data);
+    } else {
+        for (size_t i = 0; i < frame->box.h; ++i) {
+            uint32_t y = i;
+            glReadPixels(0, y, frame->box.w, 1, PFORMAT->glFormat, PFORMAT->glType, ((unsigned char*)data) + i * stride);
+        }
+    }
+
+    g_pHyprOpenGL->m_RenderData.pMonitor = nullptr;
+
+    wlr_buffer_end_data_ptr_access(frame->buffer);
+    wlr_texture_destroy(sourceTex);
+
+    return true;
 }
 
 bool CScreencopyProtocolManager::copyFrameDmabuf(SScreencopyFrame* frame) {
@@ -448,25 +502,19 @@ bool CScreencopyProtocolManager::copyFrameDmabuf(SScreencopyFrame* frame) {
     if (!sourceTex)
         return false;
 
-    float glMatrix[9];
-    wlr_matrix_identity(glMatrix);
-    wlr_matrix_translate(glMatrix, -frame->box.x, -frame->box.y);
-    wlr_matrix_scale(glMatrix, frame->pMonitor->vecPixelSize.x, frame->pMonitor->vecPixelSize.y);
+    CRegion fakeDamage = {0, 0, frame->box.width, frame->box.height};
 
-    if (!wlr_renderer_begin_with_buffer(g_pCompositor->m_sWLRRenderer, frame->buffer)) {
-        Debug::log(ERR, "[sc] dmabuf: Client requested a copy to a buffer that failed to pass wlr_renderer_begin_with_buffer");
-        wlr_texture_destroy(sourceTex);
+    if (!g_pHyprRenderer->beginRender(frame->pMonitor, fakeDamage, RENDER_MODE_TO_BUFFER, frame->buffer))
         return false;
-    }
 
-    float color[] = {0, 0, 0, 0};
-    wlr_renderer_clear(g_pCompositor->m_sWLRRenderer, color);
-    // TODO: use hl render methods to use damage
-    wlr_render_texture_with_matrix(g_pCompositor->m_sWLRRenderer, sourceTex, glMatrix, 1.0f);
+    CBox monbox = CBox{0, 0, frame->pMonitor->vecPixelSize.x, frame->pMonitor->vecPixelSize.y}.translate({-frame->box.x, -frame->box.y});
+    g_pHyprOpenGL->setMonitorTransformEnabled(false);
+    g_pHyprOpenGL->renderTexture(sourceTex, &monbox, 1);
+    g_pHyprOpenGL->setMonitorTransformEnabled(true);
+
+    g_pHyprRenderer->endRender();
 
     wlr_texture_destroy(sourceTex);
-
-    wlr_renderer_end(g_pCompositor->m_sWLRRenderer);
 
     return true;
 }

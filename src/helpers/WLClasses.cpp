@@ -8,6 +8,14 @@ SLayerSurface::SLayerSurface() {
     alpha.registerVar();
 }
 
+SLayerSurface::~SLayerSurface() {
+    if (!g_pHyprOpenGL)
+        return;
+
+    g_pHyprRenderer->makeEGLCurrent();
+    std::erase_if(g_pHyprOpenGL->m_mLayerFramebuffers, [&](const auto& other) { return other.first == this; });
+}
+
 void SLayerSurface::applyRules() {
     noAnimations     = false;
     forceBlur        = false;

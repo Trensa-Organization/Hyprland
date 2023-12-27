@@ -88,9 +88,23 @@ CRegion& CRegion::invert(pixman_box32_t* box) {
     return *this;
 }
 
+CRegion& CRegion::invert(const CBox& box) {
+    pixman_box32 pixmanBox = {box.x, box.y, box.w + box.x, box.h + box.y};
+    return this->invert(&pixmanBox);
+}
+
 CRegion& CRegion::translate(const Vector2D& vec) {
     pixman_region32_translate(&m_rRegion, vec.x, vec.y);
     return *this;
+}
+
+CRegion& CRegion::transform(const wl_output_transform t, double w, double h) {
+    wlr_region_transform(&m_rRegion, &m_rRegion, t, w, h);
+    return *this;
+}
+
+CRegion CRegion::copy() const {
+    return CRegion(*this);
 }
 
 CRegion& CRegion::scale(float scale) {

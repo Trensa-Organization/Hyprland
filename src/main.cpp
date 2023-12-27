@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     setenv("QT_QPA_PLATFORM", "wayland", 1);
     setenv("SDL_VIDEODRIVER", "wayland", 1);
     setenv("OZONE_PLATFORM", "wayland", 1);
-    
+
     // parse some args
     std::string              configPath;
     bool                     ignoreSudo = false;
@@ -58,14 +58,17 @@ int main(int argc, char** argv) {
             }
             std::string next_arg = std::next(it)->c_str();
 
-            if (!std::filesystem::exists(next_arg)) {
-                std::cerr << "[ ERROR ] Config path '" << next_arg << "' doesn't exist!\n";
+            if (std::filesystem::is_symlink(next_arg))
+                next_arg = std::filesystem::read_symlink(next_arg);
+
+            if (!std::filesystem::is_regular_file(next_arg)) {
+                std::cerr << "[ ERROR ] Config file '" << next_arg << "' doesn't exist!\n";
                 help();
 
                 return 1;
             }
 
-            configPath = next_arg;
+            configPath = std::filesystem::weakly_canonical(next_arg);
             Debug::log(LOG, "User-specified config location: '{}'", configPath);
 
             it++;
@@ -101,7 +104,8 @@ int main(int argc, char** argv) {
 
     g_pCompositor->initServer();
 
-    Init::gainRealTime();
+    if (!getenv("HYPRLAND_NO_RT") || configStringToInt(std::string(getenv("HYPRLAND_NO_RT"))) == 0)
+        Init::gainRealTime();
 
     Debug::log(LOG, "Hyprland init finished.");
 

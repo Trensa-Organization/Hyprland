@@ -732,7 +732,7 @@ void CKeybindManager::toggleActiveFloating(std::string args) {
 
     if (args != "" && args != "active" && args.length() > 1)
         PWINDOW = g_pCompositor->getWindowByRegex(args);
-      else
+    else
         PWINDOW = g_pCompositor->m_pLastWindow;
 
     if (!PWINDOW)
@@ -740,9 +740,6 @@ void CKeybindManager::toggleActiveFloating(std::string args) {
 
     // remove drag status
     g_pInputManager->currentlyDraggedWindow = nullptr;
-
-    if (g_pCompositor->isWorkspaceSpecial(PWINDOW->m_iWorkspaceID))
-        return;
 
     if (PWINDOW->m_sGroupData.pNextWindow && PWINDOW->m_sGroupData.pNextWindow != PWINDOW) {
 
@@ -1476,7 +1473,7 @@ void CKeybindManager::forceRendererReload(std::string args) {
         if (!m->output)
             continue;
 
-        auto rule = g_pConfigManager->getMonitorRuleFor(m->szName, m->output->description ? m->output->description : "");
+        auto rule = g_pConfigManager->getMonitorRuleFor(m->szName, m->szDescription);
         if (!g_pHyprRenderer->applyMonitorRule(m.get(), &rule, true)) {
             overAgain = true;
             break;
@@ -1906,7 +1903,7 @@ void CKeybindManager::alterZOrder(std::string args) {
     else if (POSITION == "bottom")
         g_pCompositor->changeWindowZOrder(PWINDOW, 0);
     else {
-        Debug::log(ERR, "alterZOrder: bad position: %s", POSITION);
+        Debug::log(ERR, "alterZOrder: bad position: {}", POSITION);
         return;
     }
 
@@ -2058,7 +2055,7 @@ void CKeybindManager::moveWindowOrGroup(std::string args) {
     static auto* const PIGNOREGROUPLOCK = &g_pConfigManager->getConfigValuePtr("binds:ignore_group_lock")->intValue;
 
     if (!isDirection(args)) {
-        Debug::log(ERR, "Cannot move into group in direction %c, unsupported direction. Supported: l,r,u/t,d/b", arg);
+        Debug::log(ERR, "Cannot move into group in direction {}, unsupported direction. Supported: l,r,u/t,d/b", arg);
         return;
     }
 

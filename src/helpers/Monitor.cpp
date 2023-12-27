@@ -50,6 +50,10 @@ void CMonitor::onConnect(bool noRule) {
 
     szName = output->name;
 
+    szDescription = output->description ? output->description : "";
+    // remove comma character from description. This allow monitor specific rules to work on monitor with comma on their description
+    szDescription.erase(std::remove(szDescription.begin(), szDescription.end(), ','), szDescription.end());
+
     if (!wlr_backend_is_drm(output->backend))
         createdByUser = true; // should be true. WL, X11 and Headless backends should be addable / removable
 
@@ -642,4 +646,13 @@ void CMonitor::moveTo(const Vector2D& pos) {
 
 Vector2D CMonitor::middle() {
     return vecPosition + vecSize / 2.f;
+}
+
+void CMonitor::updateMatrix() {
+    wlr_matrix_identity(projMatrix.data());
+    if (transform != WL_OUTPUT_TRANSFORM_NORMAL) {
+        wlr_matrix_translate(projMatrix.data(), vecPixelSize.x / 2.0, vecPixelSize.y / 2.0);
+        wlr_matrix_transform(projMatrix.data(), transform);
+        wlr_matrix_translate(projMatrix.data(), -vecTransformedSize.x / 2.0, -vecTransformedSize.y / 2.0);
+    }
 }

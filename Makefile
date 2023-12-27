@@ -50,7 +50,7 @@ install:
 	install -m644 ./docs/*.1 ${PREFIX}/share/man/man1
 
 	mkdir -p ${PREFIX}/lib/
-	cp ./subprojects/wlroots/build/libwlroots.so.12032 ${PREFIX}/lib/
+	cp ./subprojects/wlroots/build/libwlroots.so.13032 ${PREFIX}/lib/
 
 	$(MAKE) installheaders
 
@@ -58,7 +58,7 @@ uninstall:
 	rm -f ${PREFIX}/share/wayland-sessions/hyprland.desktop
 	rm -f ${PREFIX}/bin/Hyprland
 	rm -f ${PREFIX}/bin/hyprctl
-	rm -f ${PREFIX}/lib/libwlroots.so.12032
+	rm -f ${PREFIX}/lib/libwlroots.so.13032
 	rm -rf ${PREFIX}/share/hyprland
 	rm -f ${PREFIX}/share/man/man1/Hyprland.1
 	rm -f ${PREFIX}/share/man/man1/hyprctl.1
@@ -68,7 +68,7 @@ pluginenv:
 	@exit 1
 	
 installheaders:
-	@if [ ! -f ./build/Hyprland ]; then echo -en "You need to run $(MAKE) all first.\n" && exit 1; fi
+	@if [ ! -f ./src/version.h ]; then echo -en "You need to run $(MAKE) all first.\n" && exit 1; fi
 
 	mkdir -p ${PREFIX}/include/hyprland
 	mkdir -p ${PREFIX}/include/hyprland/protocols
