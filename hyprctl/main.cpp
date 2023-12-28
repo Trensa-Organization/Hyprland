@@ -23,78 +23,39 @@
 #include <filesystem>
 #include <stdarg.h>
 
-const std::string USAGE = R"#(usage:  hyprctl [flags] [<command> [args]]
-        hyprctl --batch {<command 1> [args] ; <command 2> [args] ; ...}
+const std::string USAGE = R"#(usage: hyprctl [(opt)flags] [command] [(opt)args]
+
 commands:
-LISTING COMMANDS:
-    monitors
-    monitors:           List outputs
-    workspaces
-    workspaces:         List all workspaces
-    activeworkspace
-    activeworkspace:    Get currently active workspace
-    workspacerules
-    clients:            List clients (e.g. windows)
-    clients
-    activewindow:       Get currently active window
     activewindow
-    layers:             List layers
-    layers
-    animations:         List animations and bezier curves in use
-    devices
-    devices:            List devices
+    activeworkspace
     binds
-    binds:              List registered binds
-    dispatch
-    instances:          List running Hyprland instances
-    keyword
-    layouts:            List layouts
-    version
-    globalshortcuts:    List global shortcuts
-    kill
-    version:            Print hyprland version
-    splash
-CONFIGURATION COMMANDS:
-    hyprpaper
-    keyword <keyword> [args]:   Execute a keyword
-    reload
-    getoption <option>:         Get value of <option>
-    setcursor
-    reload:                     Reload configurations
-    getoption
-PLUGIN:
+    clients
     cursorpos
-    plugin list:            List loaded plugins
-    switchxkblayout
-    plugin load <path>:     Load plugin from <path>
-    seterror
-    plugin unload <path>:   Unload plugin at <path>
-    setprop
-THEMING:
-    plugin
-    hyprpaper <keywords>        Issue hyprpaper keywords using IPC
-    notify
-    splash:                     Prints the current random splash
+    devices
+    dispatch
+    getoption
     globalshortcuts
-    cursorpos:                  Get the current cursor position in global layout coordinates
+    hyprpaper
     instances
-    setcursor <theme> <size>:   Set cursor theme and size, (except for GTK)
+    keyword
+    kill
+    layers
     layouts
-ADDITIONAL COMMANDS:
-    dispatch <name> [args]:     Run a dispatcher
+    monitors
+    notify
+    plugin
+    reload
+    setcursor
+    seterror
+    setprop
+    splash
+    switchxkblayout
+    version
+    workspacerules
+    workspaces
+
 flags:
-    kill:                       Enter kill mode, where you can kill an app by clicking on it,
-                                use ESCAPE to quit kill mode
-    switchxkblayout <args>:     Sets the xkb layout index for a keyboard, see wiki for details
-    setprop <window> <prop>:    Set window property, see wiki for details
-    seterror <color> <msg>:     Display <msg> as a error message, will reset upon reloading config
-    seterror disable:           Clear error message
-    notify <icon> <time_ms> <color> <message>:
-                                Sends a notification using the built-in Hyprland notification system.
-    output <args>:              Add and remove fake outputs to specified backend, see wiki for details.
-FLAGS:
     -j -> output in JSON
-    --help -> display this help
     --batch -> execute a batch of commands, separated by ';'
     --instance (-i) -> use a specific instance. Can be either signature or index in hyprctl instances (0, 1, etc)
 )#";
