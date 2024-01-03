@@ -342,9 +342,9 @@ bool CPluginManager::updateHeaders() {
         std::filesystem::remove_all("/tmp/hyprpm/hyprland");
     }
 
-    progress.printMessageAbove(std::string{Colors::YELLOW} + "!" + Colors::RESET + " Cloning https://github.com/hyprwm/hyprland, this might take a moment.");
+    progress.printMessageAbove(std::string{Colors::YELLOW} + "!" + Colors::RESET + " Cloning https://github.com/dragontos/hyprland, this might take a moment.");
 
-    std::string ret = execAndGet("cd /tmp/hyprpm && git clone --recursive https://github.com/hyprwm/hyprland hyprland");
+    std::string ret = execAndGet("cd /tmp/hyprpm && git clone --recursive https://github.com/dragontos/hyprland hyprland");
 
     if (!std::filesystem::exists("/tmp/hyprpm/hyprland")) {
         std::cerr << "\n" << Colors::RED << "✖" << Colors::RESET << " Could not clone the hyprland repository. shell returned:\n" << ret << "\n";
