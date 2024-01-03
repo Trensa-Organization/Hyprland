@@ -577,10 +577,10 @@ void logSystemInfo() {
 
     uname(&unameInfo);
 
-    Debug::log(LOG, "System name: {}", unameInfo.sysname);
-    Debug::log(LOG, "Node name: {}", unameInfo.nodename);
-    Debug::log(LOG, "Release: {}", unameInfo.release);
-    Debug::log(LOG, "Version: {}", unameInfo.version);
+    Debug::log(LOG, "System name: {}", std::string{unameInfo.sysname});
+    Debug::log(LOG, "Node name: {}", std::string{unameInfo.nodename});
+    Debug::log(LOG, "Release: {}", std::string{unameInfo.release});
+    Debug::log(LOG, "Version: {}", std::string{unameInfo.version});
 
     Debug::log(NONE, "\n");
 
@@ -791,4 +791,11 @@ uint32_t glFormatToType(uint32_t gl) {
         GL_UNSIGNED_INT_2_10_10_10_REV :
 #endif
         GL_UNSIGNED_BYTE;
+}
+
+bool envEnabled(const std::string& env) {
+    const auto ENV = getenv(env.c_str());
+    if (!ENV)
+        return false;
+    return std::string(ENV) == "1";
 }

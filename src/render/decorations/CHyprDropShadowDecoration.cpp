@@ -30,6 +30,10 @@ uint64_t CHyprDropShadowDecoration::getDecorationFlags() {
     return DECORATION_NON_SOLID;
 }
 
+std::string CHyprDropShadowDecoration::getDisplayName() {
+    return "Drop Shadow";
+}
+
 void CHyprDropShadowDecoration::damageEntire() {
     static auto* const PSHADOWS = &g_pConfigManager->getConfigValuePtr("decoration:drop_shadow")->intValue;
 
@@ -75,7 +79,8 @@ void CHyprDropShadowDecoration::draw(CMonitor* pMonitor, float a, const Vector2D
     if (*PSHADOWS != 1)
         return; // disabled
 
-    const auto ROUNDING        = m_pWindow->rounding() + m_pWindow->getRealBorderSize();
+    const auto ROUNDINGBASE    = m_pWindow->rounding();
+    const auto ROUNDING        = ROUNDINGBASE > 0 ? ROUNDINGBASE + m_pWindow->getRealBorderSize() : 0;
     const auto PWORKSPACE      = g_pCompositor->getWorkspaceByID(m_pWindow->m_iWorkspaceID);
     const auto WORKSPACEOFFSET = PWORKSPACE && !m_pWindow->m_bPinned ? PWORKSPACE->m_vRenderOffset.vec() : Vector2D();
 
@@ -116,13 +121,15 @@ void CHyprDropShadowDecoration::draw(CMonitor* pMonitor, float a, const Vector2D
         CBox withDecos = m_bLastWindowBoxWithDecos;
 
         // get window box
-        windowBox.translate(-pMonitor->vecPosition + WORKSPACEOFFSET).scale(pMonitor->scale).round();
-        withDecos.translate(-pMonitor->vecPosition + WORKSPACEOFFSET).scale(pMonitor->scale).round();
+        windowBox.translate(-pMonitor->vecPosition + WORKSPACEOFFSET);
+        withDecos.translate(-pMonitor->vecPosition + WORKSPACEOFFSET);
 
-        auto scaledDecoExtents = withDecos.extentsFrom(windowBox).round();
+        auto scaledExtentss = withDecos.extentsFrom(windowBox);
+        scaledExtentss      = scaledExtentss * pMonitor->scale;
+        scaledExtentss      = scaledExtentss.round();
 
         // add extents
-        windowBox.addExtents(scaledDecoExtents).round();
+        windowBox.scale(pMonitor->scale).round().addExtents(scaledExtentss);
 
         if (windowBox.width < 1 || windowBox.height < 1)
             return; // prevent assert failed
@@ -159,7 +166,7 @@ void CHyprDropShadowDecoration::draw(CMonitor* pMonitor, float a, const Vector2D
 
         g_pHyprOpenGL->m_RenderData.damage = saveDamage;
     } else {
-        g_pHyprOpenGL->renderRoundedShadow(&fullBox, ROUNDING * pMonitor->scale, *PSHADOWSIZE * pMonitor->scale, a);
+        g_pHyprOpenGL->renderRoundedShadow(&fullBox, ROUNDING * pMonitor->scale, *PSHADOWSIZE * pMonitor->scale, m_pWindow->m_cRealShadowColor.col(), a);
     }
 
     if (m_seExtents != m_seReportedExtents)

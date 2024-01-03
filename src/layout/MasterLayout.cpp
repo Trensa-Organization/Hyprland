@@ -45,10 +45,8 @@ SMasterWorkspaceData* CHyprMasterLayout::getMasterWorkspaceData(const int& ws) {
     const auto layoutoptsForWs  = g_pConfigManager->getWorkspaceRuleFor(g_pCompositor->getWorkspaceByID(ws)).layoutopts;
     auto       orientationForWs = *orientation;
 
-    try {
-        if (layoutoptsForWs.contains("orientation"))
-            orientationForWs = std::any_cast<std::string>(layoutoptsForWs.at("orientation"));
-    } catch (std::exception& e) { Debug::log(ERR, "Error from layoutopt rules: {}", e.what()); }
+    if (layoutoptsForWs.contains("orientation"))
+        orientationForWs = layoutoptsForWs.at("orientation");
 
     if (orientationForWs == "top") {
         PWORKSPACEDATA->orientation = ORIENTATION_TOP;
@@ -56,11 +54,12 @@ SMasterWorkspaceData* CHyprMasterLayout::getMasterWorkspaceData(const int& ws) {
         PWORKSPACEDATA->orientation = ORIENTATION_RIGHT;
     } else if (orientationForWs == "bottom") {
         PWORKSPACEDATA->orientation = ORIENTATION_BOTTOM;
-    } else if (orientationForWs == "left") {
-        PWORKSPACEDATA->orientation = ORIENTATION_LEFT;
-    } else {
+    } else if (orientationForWs == "center") {
         PWORKSPACEDATA->orientation = ORIENTATION_CENTER;
+    } else {
+        PWORKSPACEDATA->orientation = ORIENTATION_LEFT;
     }
+
     return PWORKSPACEDATA;
 }
 
@@ -103,16 +102,8 @@ void CHyprMasterLayout::onWindowCreatedTiling(CWindow* pWindow, eDirection direc
     const auto         MOUSECOORDS = g_pInputManager->getMouseCoordsInternal();
 
     if (g_pInputManager->m_bWasDraggingWindow && OPENINGON) {
-        for (auto& wd : OPENINGON->pWindow->m_dWindowDecorations) {
-            if (!(wd->getDecorationFlags() & DECORATION_ALLOWS_MOUSE_INPUT))
-                continue;
-
-            if (g_pDecorationPositioner->getWindowDecorationBox(wd.get()).containsPoint(MOUSECOORDS)) {
-                if (!wd->onEndWindowDragOnDeco(pWindow, MOUSECOORDS))
-                    return;
-                break;
-            }
-        }
+        if (OPENINGON->pWindow->checkInputOnDecos(INPUT_TYPE_DRAG_END, MOUSECOORDS, pWindow))
+            return;
     }
 
     // if it's a group, add the window
@@ -667,24 +658,20 @@ void CHyprMasterLayout::applyNodeDataToWindow(SMasterNodeData* pNode) {
         PWINDOW->m_sSpecialRenderData.rounding = false;
         PWINDOW->m_sSpecialRenderData.shadow   = false;
 
+        PWINDOW->updateWindowDecos();
+
         const auto RESERVED = PWINDOW->getFullWindowReservedArea();
 
-        const int  BORDERSIZE = PWINDOW->getRealBorderSize();
-
-        PWINDOW->m_vRealPosition = PWINDOW->m_vPosition + Vector2D(BORDERSIZE, BORDERSIZE) + RESERVED.topLeft;
-        PWINDOW->m_vRealSize     = PWINDOW->m_vSize - Vector2D(2 * BORDERSIZE, 2 * BORDERSIZE) - (RESERVED.topLeft + RESERVED.bottomRight);
-
-        PWINDOW->updateWindowDecos();
+        PWINDOW->m_vRealPosition = PWINDOW->m_vPosition + RESERVED.topLeft;
+        PWINDOW->m_vRealSize     = PWINDOW->m_vSize - (RESERVED.topLeft + RESERVED.bottomRight);
 
         g_pXWaylandManager->setWindowSize(PWINDOW, PWINDOW->m_vRealSize.goalv());
 
         return;
     }
 
-    const int  BORDERSIZE = PWINDOW->getRealBorderSize();
-
-    auto       calcPos  = PWINDOW->m_vPosition + Vector2D(BORDERSIZE, BORDERSIZE);
-    auto       calcSize = PWINDOW->m_vSize - Vector2D(2 * BORDERSIZE, 2 * BORDERSIZE);
+    auto       calcPos  = PWINDOW->m_vPosition;
+    auto       calcSize = PWINDOW->m_vSize;
 
     const auto OFFSETTOPLEFT = Vector2D(DISPLAYLEFT ? gapsOut : gapsIn, DISPLAYTOP ? gapsOut : gapsIn);
 
@@ -1337,6 +1324,50 @@ std::any CHyprMasterLayout::layoutMessage(SLayoutMessageHeader header, std::stri
                     nd.percMaster = std::clamp(newMfact, 0.05f, 0.95f);
             }
         }
+    } else if (command == "rollnext") {
+        const auto PWINDOW = header.pWindow;
+        const auto PNODE   = getNodeFromWindow(PWINDOW);
+
+        const auto OLDMASTER   = PNODE->isMaster ? PNODE : getMasterNodeOnWorkspace(PNODE->workspaceID);
+        const auto OLDMASTERIT = std::find(m_lMasterNodesData.begin(), m_lMasterNodesData.end(), *OLDMASTER);
+
+        for (auto& nd : m_lMasterNodesData) {
+            if (nd.workspaceID == PNODE->workspaceID && !nd.isMaster) {
+                nd.isMaster            = true;
+                const auto NEWMASTERIT = std::find(m_lMasterNodesData.begin(), m_lMasterNodesData.end(), nd);
+                m_lMasterNodesData.splice(OLDMASTERIT, m_lMasterNodesData, NEWMASTERIT);
+                const bool inheritFullscreen = prepareLoseFocus(PWINDOW);
+                switchToWindow(nd.pWindow);
+                prepareNewFocus(nd.pWindow, inheritFullscreen);
+                OLDMASTER->isMaster = false;
+                m_lMasterNodesData.splice(m_lMasterNodesData.end(), m_lMasterNodesData, OLDMASTERIT);
+                break;
+            }
+        }
+
+        recalculateMonitor(PWINDOW->m_iMonitorID);
+    } else if (command == "rollprev") {
+        const auto PWINDOW = header.pWindow;
+        const auto PNODE   = getNodeFromWindow(PWINDOW);
+
+        const auto OLDMASTER   = PNODE->isMaster ? PNODE : getMasterNodeOnWorkspace(PNODE->workspaceID);
+        const auto OLDMASTERIT = std::find(m_lMasterNodesData.begin(), m_lMasterNodesData.end(), *OLDMASTER);
+
+        for (auto& nd : m_lMasterNodesData | std::views::reverse) {
+            if (nd.workspaceID == PNODE->workspaceID && !nd.isMaster) {
+                nd.isMaster            = true;
+                const auto NEWMASTERIT = std::find(m_lMasterNodesData.begin(), m_lMasterNodesData.end(), nd);
+                m_lMasterNodesData.splice(OLDMASTERIT, m_lMasterNodesData, NEWMASTERIT);
+                const bool inheritFullscreen = prepareLoseFocus(PWINDOW);
+                switchToWindow(nd.pWindow);
+                prepareNewFocus(nd.pWindow, inheritFullscreen);
+                OLDMASTER->isMaster = false;
+                m_lMasterNodesData.splice(m_lMasterNodesData.begin(), m_lMasterNodesData, OLDMASTERIT);
+                break;
+            }
+        }
+
+        recalculateMonitor(PWINDOW->m_iMonitorID);
     }
 
     return 0;
@@ -1412,7 +1443,7 @@ void CHyprMasterLayout::replaceWindowDataWith(CWindow* from, CWindow* to) {
 
 void CHyprMasterLayout::onEnable() {
     for (auto& w : g_pCompositor->m_vWindows) {
-        if (w->m_bIsFloating || !w->m_bMappedX11 || !w->m_bIsMapped || w->isHidden())
+        if (w->m_bIsFloating || !w->m_bIsMapped || w->isHidden())
             continue;
 
         onWindowCreatedTiling(w.get());

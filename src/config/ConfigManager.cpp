@@ -80,6 +80,7 @@ void CConfigManager::setDefaultVars() {
     configValues["general:apply_sens_to_raw"].intValue     = 0;
     configValues["general:border_size"].intValue           = 1;
     configValues["general:no_border_on_floating"].intValue = 0;
+    configValues["general:border_part_of_window"].intValue = 1;
     configValues["general:gaps_in"].intValue               = 5;
     configValues["general:gaps_out"].intValue              = 20;
     configValues["general:gaps_workspaces"].intValue       = 0;
@@ -133,9 +134,11 @@ void CConfigManager::setDefaultVars() {
     configValues["group:insert_after_current"].intValue = 1;
     configValues["group:focus_removed_window"].intValue = 1;
 
+    configValues["group:groupbar:enabled"].intValue       = 1;
     configValues["group:groupbar:font_family"].strValue   = "Sans";
     configValues["group:groupbar:font_size"].intValue     = 8;
     configValues["group:groupbar:gradients"].intValue     = 1;
+    configValues["group:groupbar:priority"].intValue      = 3;
     configValues["group:groupbar:render_titles"].intValue = 1;
     configValues["group:groupbar:scrolling"].intValue     = 1;
     configValues["group:groupbar:text_color"].intValue    = 0xffffffff;
@@ -145,48 +148,51 @@ void CConfigManager::setDefaultVars() {
     ((CGradientValueData*)configValues["group:groupbar:col.locked_active"].data.get())->reset(0x66ff5500);
     ((CGradientValueData*)configValues["group:groupbar:col.locked_inactive"].data.get())->reset(0x66775500);
 
-    configValues["debug:int"].intValue                = 0;
-    configValues["debug:log_damage"].intValue         = 0;
-    configValues["debug:overlay"].intValue            = 0;
-    configValues["debug:damage_blink"].intValue       = 0;
-    configValues["debug:disable_logs"].intValue       = 1;
-    configValues["debug:disable_time"].intValue       = 1;
-    configValues["debug:enable_stdout_logs"].intValue = 0;
-    configValues["debug:damage_tracking"].intValue    = DAMAGE_TRACKING_FULL;
-    configValues["debug:manual_crash"].intValue       = 0;
-    configValues["debug:suppress_errors"].intValue    = 0;
-    configValues["debug:watchdog_timeout"].intValue   = 5;
+    configValues["debug:int"].intValue                  = 0;
+    configValues["debug:log_damage"].intValue           = 0;
+    configValues["debug:overlay"].intValue              = 0;
+    configValues["debug:damage_blink"].intValue         = 0;
+    configValues["debug:disable_logs"].intValue         = 1;
+    configValues["debug:disable_time"].intValue         = 1;
+    configValues["debug:enable_stdout_logs"].intValue   = 0;
+    configValues["debug:damage_tracking"].intValue      = DAMAGE_TRACKING_FULL;
+    configValues["debug:manual_crash"].intValue         = 0;
+    configValues["debug:suppress_errors"].intValue      = 0;
+    configValues["debug:watchdog_timeout"].intValue     = 5;
+    configValues["debug:disable_scale_checks"].intValue = 0;
 
-    configValues["decoration:rounding"].intValue                 = 0;
-    configValues["decoration:blur:enabled"].intValue             = 1;
-    configValues["decoration:blur:size"].intValue                = 8;
-    configValues["decoration:blur:passes"].intValue              = 1;
-    configValues["decoration:blur:ignore_opacity"].intValue      = 0;
-    configValues["decoration:blur:new_optimizations"].intValue   = 1;
-    configValues["decoration:blur:xray"].intValue                = 0;
-    configValues["decoration:blur:contrast"].floatValue          = 0.8916;
-    configValues["decoration:blur:brightness"].floatValue        = 1.0;
-    configValues["decoration:blur:vibrancy"].floatValue          = 0.1696;
-    configValues["decoration:blur:vibrancy_darkness"].floatValue = 0.0;
-    configValues["decoration:blur:noise"].floatValue             = 0.0117;
-    configValues["decoration:blur:special"].intValue             = 0;
-    configValues["decoration:active_opacity"].floatValue         = 1;
-    configValues["decoration:inactive_opacity"].floatValue       = 1;
-    configValues["decoration:fullscreen_opacity"].floatValue     = 1;
-    configValues["decoration:no_blur_on_oversized"].intValue     = 0;
-    configValues["decoration:drop_shadow"].intValue              = 1;
-    configValues["decoration:shadow_range"].intValue             = 4;
-    configValues["decoration:shadow_render_power"].intValue      = 3;
-    configValues["decoration:shadow_ignore_window"].intValue     = 1;
-    configValues["decoration:shadow_offset"].vecValue            = Vector2D();
-    configValues["decoration:shadow_scale"].floatValue           = 1.f;
-    configValues["decoration:col.shadow"].intValue               = 0xee1a1a1a;
-    configValues["decoration:col.shadow_inactive"].intValue      = INT_MAX;
-    configValues["decoration:dim_inactive"].intValue             = 0;
-    configValues["decoration:dim_strength"].floatValue           = 0.5f;
-    configValues["decoration:dim_special"].floatValue            = 0.2f;
-    configValues["decoration:dim_around"].floatValue             = 0.4f;
-    configValues["decoration:screen_shader"].strValue            = STRVAL_EMPTY;
+    configValues["decoration:rounding"].intValue                  = 0;
+    configValues["decoration:blur:enabled"].intValue              = 1;
+    configValues["decoration:blur:size"].intValue                 = 8;
+    configValues["decoration:blur:passes"].intValue               = 1;
+    configValues["decoration:blur:ignore_opacity"].intValue       = 0;
+    configValues["decoration:blur:new_optimizations"].intValue    = 1;
+    configValues["decoration:blur:xray"].intValue                 = 0;
+    configValues["decoration:blur:contrast"].floatValue           = 0.8916;
+    configValues["decoration:blur:brightness"].floatValue         = 1.0;
+    configValues["decoration:blur:vibrancy"].floatValue           = 0.1696;
+    configValues["decoration:blur:vibrancy_darkness"].floatValue  = 0.0;
+    configValues["decoration:blur:noise"].floatValue              = 0.0117;
+    configValues["decoration:blur:special"].intValue              = 0;
+    configValues["decoration:blur:popups"].intValue               = 0;
+    configValues["decoration:blur:popups_ignorealpha"].floatValue = 0.2;
+    configValues["decoration:active_opacity"].floatValue          = 1;
+    configValues["decoration:inactive_opacity"].floatValue        = 1;
+    configValues["decoration:fullscreen_opacity"].floatValue      = 1;
+    configValues["decoration:no_blur_on_oversized"].intValue      = 0;
+    configValues["decoration:drop_shadow"].intValue               = 1;
+    configValues["decoration:shadow_range"].intValue              = 4;
+    configValues["decoration:shadow_render_power"].intValue       = 3;
+    configValues["decoration:shadow_ignore_window"].intValue      = 1;
+    configValues["decoration:shadow_offset"].vecValue             = Vector2D();
+    configValues["decoration:shadow_scale"].floatValue            = 1.f;
+    configValues["decoration:col.shadow"].intValue                = 0xee1a1a1a;
+    configValues["decoration:col.shadow_inactive"].intValue       = INT_MAX;
+    configValues["decoration:dim_inactive"].intValue              = 0;
+    configValues["decoration:dim_strength"].floatValue            = 0.5f;
+    configValues["decoration:dim_special"].floatValue             = 0.2f;
+    configValues["decoration:dim_around"].floatValue              = 0.4f;
+    configValues["decoration:screen_shader"].strValue             = STRVAL_EMPTY;
 
     configValues["dwindle:pseudotile"].intValue                   = 0;
     configValues["dwindle:force_split"].intValue                  = 0;
@@ -235,6 +241,7 @@ void CConfigManager::setDefaultVars() {
     configValues["input:scroll_method"].strValue                    = STRVAL_EMPTY;
     configValues["input:scroll_button"].intValue                    = 0;
     configValues["input:scroll_button_lock"].intValue               = 0;
+    configValues["input:scroll_points"].strValue                    = STRVAL_EMPTY;
     configValues["input:touchpad:natural_scroll"].intValue          = 0;
     configValues["input:touchpad:disable_while_typing"].intValue    = 1;
     configValues["input:touchpad:clickfinger_behavior"].intValue    = 0;
@@ -250,6 +257,7 @@ void CConfigManager::setDefaultVars() {
     configValues["input:tablet:output"].strValue                    = STRVAL_EMPTY;
     configValues["input:tablet:region_position"].vecValue           = Vector2D();
     configValues["input:tablet:region_size"].vecValue               = Vector2D();
+    configValues["input:tablet:relative_input"].intValue            = 0;
 
     configValues["binds:pass_mouse_when_bound"].intValue       = 0;
     configValues["binds:scroll_event_delay"].intValue          = 300;
@@ -275,6 +283,8 @@ void CConfigManager::setDefaultVars() {
 
     configValues["xwayland:use_nearest_neighbor"].intValue = 1;
     configValues["xwayland:force_zero_scaling"].intValue   = 0;
+
+    configValues["opengl:nvidia_anti_flicker"].intValue = 1;
 
     configValues["autogenerated"].intValue = 0;
 }
@@ -305,11 +315,13 @@ void CConfigManager::setDeviceDefaultVars(const std::string& dev) {
     cfgValues["scroll_method"].strValue           = STRVAL_EMPTY;
     cfgValues["scroll_button"].intValue           = 0;
     cfgValues["scroll_button_lock"].intValue      = 0;
+    cfgValues["scroll_points"].strValue           = STRVAL_EMPTY;
     cfgValues["transform"].intValue               = 0;
     cfgValues["output"].strValue                  = STRVAL_EMPTY;
     cfgValues["enabled"].intValue                 = 1;          // only for mice / touchpads
     cfgValues["region_position"].vecValue         = Vector2D(); // only for tablets
     cfgValues["region_size"].vecValue             = Vector2D(); // only for tablets
+    cfgValues["relative_input"].intValue          = 0;          // only for tablets
 }
 
 void CConfigManager::setDefaultAnimationVars() {
@@ -1021,16 +1033,31 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
     rule.szRule  = RULE;
     rule.szValue = VALUE;
 
-    const auto TITLEPOS      = VALUE.find("title:");
-    const auto CLASSPOS      = VALUE.find("class:");
-    const auto X11POS        = VALUE.find("xwayland:");
-    const auto FLOATPOS      = VALUE.find("floating:");
-    const auto FULLSCREENPOS = VALUE.find("fullscreen:");
-    const auto PINNEDPOS     = VALUE.find("pinned:");
-    const auto WORKSPACEPOS  = VALUE.find("workspace:");
+    const auto TITLEPOS        = VALUE.find("title:");
+    const auto CLASSPOS        = VALUE.find("class:");
+    const auto INITIALTITLEPOS = VALUE.find("initialTitle:");
+    const auto INITIALCLASSPOS = VALUE.find("initialClass:");
+    const auto X11POS          = VALUE.find("xwayland:");
+    const auto FLOATPOS        = VALUE.find("floating:");
+    const auto FULLSCREENPOS   = VALUE.find("fullscreen:");
+    const auto PINNEDPOS       = VALUE.find("pinned:");
+    const auto FOCUSPOS        = VALUE.find("focus:");
+    const auto ONWORKSPACEPOS  = VALUE.find("onworkspace:");
 
-    if (TITLEPOS == std::string::npos && CLASSPOS == std::string::npos && X11POS == std::string::npos && FLOATPOS == std::string::npos && FULLSCREENPOS == std::string::npos &&
-        PINNEDPOS == std::string::npos && WORKSPACEPOS == std::string::npos) {
+    // find workspacepos that isn't onworkspacepos
+    size_t WORKSPACEPOS = std::string::npos;
+    size_t currentPos   = VALUE.find("workspace:");
+    while (currentPos != std::string::npos) {
+        if (currentPos == 0 || VALUE[currentPos - 1] != 'n') {
+            WORKSPACEPOS = currentPos;
+            break;
+        }
+        currentPos = VALUE.find("workspace:", currentPos + 1);
+    }
+
+    if (TITLEPOS == std::string::npos && CLASSPOS == std::string::npos && INITIALTITLEPOS == std::string::npos && INITIALCLASSPOS == std::string::npos &&
+        X11POS == std::string::npos && FLOATPOS == std::string::npos && FULLSCREENPOS == std::string::npos && PINNEDPOS == std::string::npos && WORKSPACEPOS == std::string::npos &&
+        FOCUSPOS == std::string::npos && ONWORKSPACEPOS == std::string::npos) {
         Debug::log(ERR, "Invalid rulev2 syntax: {}", VALUE);
         parseError = "Invalid rulev2 syntax: " + VALUE;
         return;
@@ -1045,6 +1072,10 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
             min = TITLEPOS;
         if (CLASSPOS > pos && CLASSPOS < min)
             min = CLASSPOS;
+        if (INITIALTITLEPOS > pos && INITIALTITLEPOS < min)
+            min = INITIALTITLEPOS;
+        if (INITIALCLASSPOS > pos && INITIALCLASSPOS < min)
+            min = INITIALCLASSPOS;
         if (X11POS > pos && X11POS < min)
             min = X11POS;
         if (FLOATPOS > pos && FLOATPOS < min)
@@ -1053,8 +1084,12 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
             min = FULLSCREENPOS;
         if (PINNEDPOS > pos && PINNEDPOS < min)
             min = PINNEDPOS;
+        if (ONWORKSPACEPOS > pos && ONWORKSPACEPOS < min)
+            min = ONWORKSPACEPOS;
         if (WORKSPACEPOS > pos && WORKSPACEPOS < min)
-            min = PINNEDPOS;
+            min = WORKSPACEPOS;
+        if (FOCUSPOS > pos && FOCUSPOS < min)
+            min = FOCUSPOS;
 
         result = result.substr(0, min - pos);
 
@@ -1072,6 +1107,12 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
     if (TITLEPOS != std::string::npos)
         rule.szTitle = extract(TITLEPOS + 6);
 
+    if (INITIALCLASSPOS != std::string::npos)
+        rule.szInitialClass = extract(INITIALCLASSPOS + 13);
+
+    if (INITIALTITLEPOS != std::string::npos)
+        rule.szInitialTitle = extract(INITIALTITLEPOS + 13);
+
     if (X11POS != std::string::npos)
         rule.bX11 = extract(X11POS + 9) == "1" ? 1 : 0;
 
@@ -1087,6 +1128,12 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
     if (WORKSPACEPOS != std::string::npos)
         rule.szWorkspace = extract(WORKSPACEPOS + 10);
 
+    if (FOCUSPOS != std::string::npos)
+        rule.bFocus = extract(FOCUSPOS + 6) == "1" ? 1 : 0;
+
+    if (ONWORKSPACEPOS != std::string::npos)
+        rule.iOnWorkspace = configStringToInt(extract(ONWORKSPACEPOS + 12));
+
     if (RULE == "unset") {
         std::erase_if(m_dWindowRules, [&](const SWindowRule& other) {
             if (!other.v2) {
@@ -1096,6 +1143,12 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
                     return false;
 
                 if (!rule.szTitle.empty() && rule.szTitle != other.szTitle)
+                    return false;
+
+                if (!rule.szInitialClass.empty() && rule.szInitialClass != other.szInitialClass)
+                    return false;
+
+                if (!rule.szInitialTitle.empty() && rule.szInitialTitle != other.szInitialTitle)
                     return false;
 
                 if (rule.bX11 != -1 && rule.bX11 != other.bX11)
@@ -1111,6 +1164,12 @@ void CConfigManager::handleWindowRuleV2(const std::string& command, const std::s
                     return false;
 
                 if (!rule.szWorkspace.empty() && rule.szWorkspace != other.szWorkspace)
+                    return false;
+
+                if (rule.bFocus != -1 && rule.bFocus != other.bFocus)
+                    return false;
+
+                if (rule.iOnWorkspace != -1 && rule.iOnWorkspace != other.iOnWorkspace)
                     return false;
 
                 return true;
@@ -1213,8 +1272,20 @@ void CConfigManager::handleWorkspaceRules(const std::string& command, const std:
             wsRule.isPersistent = configStringToInt(rule.substr(delim + 11));
         else if ((delim = rule.find(ruleOnCreatedEmtpy)) != std::string::npos)
             wsRule.onCreatedEmptyRunCmd = cleanCmdForWorkspace(name, rule.substr(delim + ruleOnCreatedEmtpyLen));
-        else if ((delim = rule.find("layoutopt:orientation:")) != std::string::npos)
-            wsRule.layoutopts["orientation"] = rule.substr(delim + 22);
+        else if ((delim = rule.find("layoutopt:")) != std::string::npos) {
+            std::string opt = rule.substr(delim + 10);
+            if (!opt.contains(":")) {
+                // invalid
+                Debug::log(ERR, "Invalid workspace rule found: {}", rule);
+                parseError = "Invalid workspace rule found: " + rule;
+                return;
+            }
+
+            std::string val = opt.substr(opt.find(":") + 1);
+            opt             = opt.substr(0, opt.find(":"));
+
+            wsRule.layoutopts[opt] = val;
+        }
     };
 
     size_t      pos = 0;
@@ -1452,7 +1523,10 @@ std::string CConfigManager::parseKeyword(const std::string& COMMAND, const std::
 void CConfigManager::applyUserDefinedVars(std::string& line, const size_t equalsPlace) {
     auto dollarPlace = line.find_first_of('$', equalsPlace);
 
+    int  times = 0;
+
     while (dollarPlace != std::string::npos) {
+        times++;
 
         const auto STRAFTERDOLLAR = line.substr(dollarPlace + 1);
         bool       found          = false;
@@ -1475,6 +1549,13 @@ void CConfigManager::applyUserDefinedVars(std::string& line, const size_t equals
         }
 
         dollarPlace = line.find_first_of('$', dollarPlace + 1);
+
+        if (times > 256 /* arbitrary limit */) {
+            line       = "";
+            parseError = "Maximum variable recursion limit hit. Evaluating the line led to too many variable substitutions.";
+            Debug::log(ERR, "Variable recursion limit hit in configmanager");
+            break;
+        }
     }
 }
 
@@ -1599,9 +1680,15 @@ void CConfigManager::loadConfigLoadVars() {
     ifs.open(mainConfigPath);
 
     if (!ifs.good()) {
-        Debug::log(WARN, "Config reading error. Attempting to generate, backing up old one if exists");
-
         ifs.close();
+
+        if (!g_pCompositor->explicitConfigPath.empty()) {
+            Debug::log(WARN, "Config reading error!");
+            parseError = "Broken config file! (Could not read)";
+            return;
+        }
+
+        Debug::log(WARN, "Config reading error. Attempting to generate, backing up old one if exists");
 
         if (std::filesystem::exists(mainConfigPath))
             std::filesystem::rename(mainConfigPath, mainConfigPath + ".backup");
@@ -1643,6 +1730,10 @@ void CConfigManager::loadConfigLoadVars() {
         }
 
         ifs.close();
+    }
+
+    for (auto& w : g_pCompositor->m_vWindows) {
+        w->uncacheWindowDecos();
     }
 
     for (auto& m : g_pCompositor->m_vMonitors)
@@ -1727,6 +1818,8 @@ void CConfigManager::loadConfigLoadVars() {
     handlePluginLoads();
 
     EMIT_HOOK_EVENT("configReloaded", nullptr);
+    if (g_pEventManager)
+        g_pEventManager->postEvent(SHyprIPCEvent{"configreloaded", ""});
 }
 
 void CConfigManager::tick() {
@@ -1945,6 +2038,20 @@ std::vector<SWindowRule> CConfigManager::getMatchingRules(CWindow* pWindow) {
                         continue;
                 }
 
+                if (rule.szInitialTitle != "") {
+                    std::regex RULECHECK(rule.szInitialTitle);
+
+                    if (!std::regex_search(pWindow->m_szInitialTitle, RULECHECK))
+                        continue;
+                }
+
+                if (rule.szInitialClass != "") {
+                    std::regex RULECHECK(rule.szInitialClass);
+
+                    if (!std::regex_search(pWindow->m_szInitialClass, RULECHECK))
+                        continue;
+                }
+
                 if (rule.bX11 != -1) {
                     if (pWindow->m_bIsX11 != rule.bX11)
                         continue;
@@ -1962,6 +2069,16 @@ std::vector<SWindowRule> CConfigManager::getMatchingRules(CWindow* pWindow) {
 
                 if (rule.bPinned != -1) {
                     if (pWindow->m_bPinned != rule.bPinned)
+                        continue;
+                }
+
+                if (rule.bFocus != -1) {
+                    if (rule.bFocus != (g_pCompositor->m_pLastWindow == pWindow))
+                        continue;
+                }
+
+                if (rule.iOnWorkspace != -1) {
+                    if (rule.iOnWorkspace != g_pCompositor->getWindowsOnWorkspace(pWindow->m_iWorkspaceID))
                         continue;
                 }
 
@@ -2055,12 +2172,12 @@ void CConfigManager::dispatchExecOnce() {
 
     // update dbus env
     if (g_pCompositor->m_sWLRSession)
-        handleRawExec(
-            "",
+        handleRawExec("",
 #ifdef USES_SYSTEMD
-            "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && hash dbus-update-activation-environment 2>/dev/null && "
+                      "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME && hash "
+                      "dbus-update-activation-environment 2>/dev/null && "
 #endif
-            "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE");
+                      "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE QT_QPA_PLATFORMTHEME");
 
     firstExecDispatched = true;
 

@@ -75,10 +75,9 @@ std::string monitorsRequest(std::string request, HyprCtl::eHyprCtlOutputFormat f
     "vrr": {},
     "activelyTearing": {}
 }},)#",
-                m->ID, escapeJSONStrings(m->szName), escapeJSONStrings(m->szDescription), (m->output->make ? m->output->make : ""),
-                (m->output->model ? m->output->model : ""), (m->output->serial ? m->output->serial : ""), (int)m->vecPixelSize.x, (int)m->vecPixelSize.y, m->refreshRate,
-                (int)m->vecPosition.x, (int)m->vecPosition.y, m->activeWorkspace,
-                (m->activeWorkspace == -1 ? "" : escapeJSONStrings(g_pCompositor->getWorkspaceByID(m->activeWorkspace)->m_szName)), m->specialWorkspaceID,
+                m->ID, escapeJSONStrings(m->szName), escapeJSONStrings(m->szDescription), (m->output->make ? m->output->make : ""), (m->output->model ? m->output->model : ""),
+                (m->output->serial ? m->output->serial : ""), (int)m->vecPixelSize.x, (int)m->vecPixelSize.y, m->refreshRate, (int)m->vecPosition.x, (int)m->vecPosition.y,
+                m->activeWorkspace, (m->activeWorkspace == -1 ? "" : escapeJSONStrings(g_pCompositor->getWorkspaceByID(m->activeWorkspace)->m_szName)), m->specialWorkspaceID,
                 escapeJSONStrings(getWorkspaceNameFromSpecialID(m->specialWorkspaceID)), (int)m->vecReservedTopLeft.x, (int)m->vecReservedTopLeft.y,
                 (int)m->vecReservedBottomRight.x, (int)m->vecReservedBottomRight.y, m->scale, (int)m->transform, (m.get() == g_pCompositor->m_pLastMonitor ? "true" : "false"),
                 (m->dpmsStatus ? "true" : "false"), (m->output->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED ? "true" : "false"),
@@ -93,17 +92,17 @@ std::string monitorsRequest(std::string request, HyprCtl::eHyprCtlOutputFormat f
             if (!m->output || m->ID == -1ull)
                 continue;
 
-            result += std::format(
-                "Monitor {} (ID {}):\n\t{}x{}@{:.5f} at {}x{}\n\tdescription: {}\n\tmake: {}\n\tmodel: {}\n\tserial: {}\n\tactive workspace: {} ({})\n\tspecial "
-                "workspace: {} ({})\n\treserved: {} "
-                "{} {} {}\n\tscale: {:.2f}\n\ttransform: "
-                "{}\n\tfocused: {}\n\tdpmsStatus: {}\n\tvrr: {}\n\tactivelyTearing: {}\n\n",
-                m->szName, m->ID, (int)m->vecPixelSize.x, (int)m->vecPixelSize.y, m->refreshRate, (int)m->vecPosition.x, (int)m->vecPosition.y,
-                m->szDescription, (m->output->make ? m->output->make : ""), (m->output->model ? m->output->model : ""),
-                (m->output->serial ? m->output->serial : ""), m->activeWorkspace, (m->activeWorkspace == -1 ? "" : g_pCompositor->getWorkspaceByID(m->activeWorkspace)->m_szName),
-                m->specialWorkspaceID, getWorkspaceNameFromSpecialID(m->specialWorkspaceID), (int)m->vecReservedTopLeft.x, (int)m->vecReservedTopLeft.y,
-                (int)m->vecReservedBottomRight.x, (int)m->vecReservedBottomRight.y, m->scale, (int)m->transform, (m.get() == g_pCompositor->m_pLastMonitor ? "yes" : "no"),
-                (int)m->dpmsStatus, (int)(m->output->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED), m->tearingState.activelyTearing);
+            result +=
+                std::format("Monitor {} (ID {}):\n\t{}x{}@{:.5f} at {}x{}\n\tdescription: {}\n\tmake: {}\n\tmodel: {}\n\tserial: {}\n\tactive workspace: {} ({})\n\tspecial "
+                            "workspace: {} ({})\n\treserved: {} "
+                            "{} {} {}\n\tscale: {:.2f}\n\ttransform: "
+                            "{}\n\tfocused: {}\n\tdpmsStatus: {}\n\tvrr: {}\n\tactivelyTearing: {}\n\n",
+                            m->szName, m->ID, (int)m->vecPixelSize.x, (int)m->vecPixelSize.y, m->refreshRate, (int)m->vecPosition.x, (int)m->vecPosition.y, m->szDescription,
+                            (m->output->make ? m->output->make : ""), (m->output->model ? m->output->model : ""), (m->output->serial ? m->output->serial : ""), m->activeWorkspace,
+                            (m->activeWorkspace == -1 ? "" : g_pCompositor->getWorkspaceByID(m->activeWorkspace)->m_szName), m->specialWorkspaceID,
+                            getWorkspaceNameFromSpecialID(m->specialWorkspaceID), (int)m->vecReservedTopLeft.x, (int)m->vecReservedTopLeft.y, (int)m->vecReservedBottomRight.x,
+                            (int)m->vecReservedBottomRight.y, m->scale, (int)m->transform, (m.get() == g_pCompositor->m_pLastMonitor ? "yes" : "no"), (int)m->dpmsStatus,
+                            (int)(m->output->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED), m->tearingState.activelyTearing);
         }
     }
 
@@ -749,15 +748,12 @@ std::string versionRequest(HyprCtl::eHyprCtlOutputFormat format) {
 
     if (format == HyprCtl::eHyprCtlOutputFormat::FORMAT_NORMAL) {
         std::string result = "Hyprland, built from branch " + std::string(GIT_BRANCH) + " at commit " + GIT_COMMIT_HASH + " " + GIT_DIRTY + " (" + commitMsg +
-            ").\nTag: " + GIT_TAG + "\n\nflags: (if any)\n";
+            ").\nDate: " + GIT_COMMIT_DATE + "\nTag: " + GIT_TAG + "\n\nflags: (if any)\n";
 
 #ifdef LEGACY_RENDERER
         result += "legacyrenderer\n";
 #endif
-#ifndef NDEBUG
-        result += "debug\n";
-#endif
-#ifdef HYPRLAND_DEBUG
+#ifndef ISDEBUG
         result += "debug\n";
 #endif
 #ifdef NO_XWAYLAND
@@ -772,17 +768,15 @@ std::string versionRequest(HyprCtl::eHyprCtlOutputFormat format) {
     "commit": "{}",
     "dirty": {},
     "commit_message": "{}",
+    "commit_date": "{}",
     "tag": "{}",
     "flags": [)#",
-            GIT_BRANCH, GIT_COMMIT_HASH, (strcmp(GIT_DIRTY, "dirty") == 0 ? "true" : "false"), escapeJSONStrings(commitMsg), GIT_TAG);
+            GIT_BRANCH, GIT_COMMIT_HASH, (strcmp(GIT_DIRTY, "dirty") == 0 ? "true" : "false"), escapeJSONStrings(commitMsg), GIT_COMMIT_DATE, GIT_TAG);
 
 #ifdef LEGACY_RENDERER
         result += "\"legacyrenderer\",";
 #endif
-#ifndef NDEBUG
-        result += "\"debug\",";
-#endif
-#ifdef HYPRLAND_DEBUG
+#ifndef ISDEBUG
         result += "\"debug\",";
 #endif
 #ifdef NO_XWAYLAND
@@ -1180,6 +1174,32 @@ std::string dispatchGetOption(std::string request, HyprCtl::eHyprCtlOutputFormat
     }
 }
 
+std::string decorationRequest(std::string request, HyprCtl::eHyprCtlOutputFormat format) {
+    CVarList   vars(request, 0, ' ');
+    const auto PWINDOW = g_pCompositor->getWindowByRegex(vars[1]);
+
+    if (!PWINDOW)
+        return "none";
+
+    std::string result = "";
+    if (format == HyprCtl::FORMAT_JSON) {
+        result += "[";
+        for (auto& wd : PWINDOW->m_dWindowDecorations) {
+            result += "{\n\"decorationName\": \"" + wd->getDisplayName() + "\",\n\"priority\": " + std::to_string(wd->getPositioningInfo().priority) + "\n},";
+        }
+
+        trimTrailingComma(result);
+        result += "]";
+    } else {
+        result = +"Decoration\tPriority\n";
+        for (auto& wd : PWINDOW->m_dWindowDecorations) {
+            result += wd->getDisplayName() + "\t" + std::to_string(wd->getPositioningInfo().priority) + "\n";
+        }
+    }
+
+    return result;
+}
+
 void createOutputIter(wlr_backend* backend, void* data) {
     const auto DATA = (std::pair<std::string, bool>*)data;
 
@@ -1421,6 +1441,8 @@ std::string getReply(std::string request) {
         return dispatchSetCursor(request);
     else if (request.starts_with("getoption"))
         return dispatchGetOption(request, format);
+    else if (request.starts_with("decorations"))
+        return decorationRequest(request, format);
     else if (request.starts_with("[[BATCH]]"))
         return dispatchBatch(request);
 

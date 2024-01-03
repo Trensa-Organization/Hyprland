@@ -319,14 +319,16 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
 
     if (!foundSurface) {
         if (!m_bEmptyFocusCursorSet) {
-            m_eBorderIconDirection = BORDERICON_NONE;
-            if (g_pHyprRenderer->m_bHasARenderedCursor) {
-                // TODO: maybe wrap?
-                if (m_ecbClickBehavior == CLICKMODE_KILL)
-                    setCursorImageOverride("crosshair");
-                else
-                    setCursorImageOverride("left_ptr");
+            if (*PRESIZEONBORDER && *PRESIZECURSORICON && m_eBorderIconDirection != BORDERICON_NONE) {
+                m_eBorderIconDirection = BORDERICON_NONE;
+                unsetCursorImage();
             }
+
+            // TODO: maybe wrap?
+            if (m_ecbClickBehavior == CLICKMODE_KILL)
+                setCursorImageOverride("crosshair");
+            else
+                setCursorImageOverride("left_ptr");
 
             m_bEmptyFocusCursorSet = true;
         }
@@ -481,12 +483,7 @@ void CInputManager::onMouseButton(wlr_pointer_button_event* e) {
 }
 
 void CInputManager::processMouseRequest(wlr_seat_pointer_request_set_cursor_event* e) {
-    if (!e->surface)
-        g_pHyprRenderer->m_bWindowRequestedCursorHide = true;
-    else
-        g_pHyprRenderer->m_bWindowRequestedCursorHide = false;
-
-    if (!cursorImageUnlocked() || !g_pHyprRenderer->m_bHasARenderedCursor)
+    if (!cursorImageUnlocked())
         return;
 
     if (e->seat_client == g_pCompositor->m_sSeat.seat->pointer_state.focused_client) {
@@ -509,7 +506,7 @@ void CInputManager::processMouseRequest(wlr_seat_pointer_request_set_cursor_even
 }
 
 void CInputManager::processMouseRequest(wlr_cursor_shape_manager_v1_request_set_shape_event* e) {
-    if (!g_pHyprRenderer->m_bHasARenderedCursor || !cursorImageUnlocked())
+    if (!cursorImageUnlocked())
         return;
 
     if (e->seat_client == g_pCompositor->m_sSeat.seat->pointer_state.focused_client) {
@@ -551,9 +548,6 @@ void CInputManager::setCursorImageOverride(const std::string& name) {
 }
 
 bool CInputManager::cursorImageUnlocked() {
-    if (!g_pHyprRenderer->m_bHasARenderedCursor)
-        return false;
-
     if (m_ecbClickBehavior == CLICKMODE_KILL)
         return false;
 
@@ -607,24 +601,16 @@ void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
     const auto mouseCoords = g_pInputManager->getMouseCoordsInternal();
     const auto w           = g_pCompositor->vectorToWindowIdeal(mouseCoords);
 
-    if (w && !w->m_bIsFullscreen && !w->hasPopupAt(mouseCoords)) {
-        for (auto& wd : w->m_dWindowDecorations) {
-            if (!(wd->getDecorationFlags() & DECORATION_ALLOWS_MOUSE_INPUT))
-                continue;
-
-            if (g_pDecorationPositioner->getWindowDecorationBox(wd.get()).containsPoint(mouseCoords)) {
-                wd->onMouseButtonOnDeco(mouseCoords, e);
-                return;
-            }
-        }
-    }
+    if (w && !m_bLastFocusOnLS && w->checkInputOnDecos(INPUT_TYPE_BUTTON, mouseCoords, e))
+        return;
 
     // clicking on border triggers resize
     // TODO detect click on LS properly
-    if (*PRESIZEONBORDER && !m_bLastFocusOnLS) {
+    if (*PRESIZEONBORDER && !m_bLastFocusOnLS && e->state == WLR_BUTTON_PRESSED) {
         if (w && !w->m_bIsFullscreen) {
             const CBox real = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
             const CBox grab = {real.x - BORDER_GRAB_AREA, real.y - BORDER_GRAB_AREA, real.width + 2 * BORDER_GRAB_AREA, real.height + 2 * BORDER_GRAB_AREA};
+
             if ((grab.containsPoint(mouseCoords) && (!real.containsPoint(mouseCoords) || w->isInCurvedCorner(mouseCoords.x, mouseCoords.y))) && !w->hasPopupAt(mouseCoords)) {
                 g_pKeybindManager->resizeWithBorder(e);
                 return;
@@ -687,8 +673,7 @@ void CInputManager::processMouseDownKill(wlr_pointer_button_event* e) {
 }
 
 void CInputManager::onMouseWheel(wlr_pointer_axis_event* e) {
-    static auto* const PSCROLLFACTOR      = &g_pConfigManager->getConfigValuePtr("input:touchpad:scroll_factor")->floatValue;
-    static auto* const PGROUPBARSCROLLING = &g_pConfigManager->getConfigValuePtr("group:groupbar:scrolling")->intValue;
+    static auto* const PSCROLLFACTOR = &g_pConfigManager->getConfigValuePtr("input:touchpad:scroll_factor")->floatValue;
 
     auto               factor = (*PSCROLLFACTOR <= 0.f || e->source != WLR_AXIS_SOURCE_FINGER ? 1.f : *PSCROLLFACTOR);
 
@@ -702,18 +687,12 @@ void CInputManager::onMouseWheel(wlr_pointer_axis_event* e) {
     if (!passEvent)
         return;
 
-    const auto MOUSECOORDS = g_pInputManager->getMouseCoordsInternal();
-    const auto pWindow     = g_pCompositor->vectorToWindowIdeal(MOUSECOORDS);
+    if (!m_bLastFocusOnLS) {
+        const auto MOUSECOORDS = g_pInputManager->getMouseCoordsInternal();
+        const auto PWINDOW     = g_pCompositor->vectorToWindowIdeal(MOUSECOORDS);
 
-    if (*PGROUPBARSCROLLING && pWindow && !pWindow->m_bIsFullscreen && !pWindow->hasPopupAt(MOUSECOORDS) && pWindow->m_sGroupData.pNextWindow) {
-        const CBox box = g_pDecorationPositioner->getWindowDecorationBox(pWindow->getDecorationByType(DECORATION_GROUPBAR));
-        if (box.containsPoint(MOUSECOORDS)) {
-            if (e->delta > 0)
-                pWindow->setGroupCurrent(pWindow->m_sGroupData.pNextWindow);
-            else
-                pWindow->setGroupCurrent(pWindow->getGroupPrevious());
+        if (PWINDOW && PWINDOW->checkInputOnDecos(INPUT_TYPE_AXIS, MOUSECOORDS, e))
             return;
-        }
     }
 
     wlr_seat_pointer_notify_axis(g_pCompositor->m_sSeat.seat, e->time_msec, e->orientation, factor * e->delta, std::round(factor * e->delta_discrete), e->source);
@@ -853,7 +832,7 @@ void CInputManager::applyConfigToKeyboard(SKeyboard* pKeyboard) {
     pKeyboard->repeatDelay = REPEATDELAY;
     pKeyboard->repeatRate  = REPEATRATE;
     pKeyboard->numlockOn   = NUMLOCKON;
-    pKeyboard->xkbFilePath = FILEPATH.c_str();
+    pKeyboard->xkbFilePath = FILEPATH;
 
     xkb_rule_names rules = {.rules = RULES.c_str(), .model = MODEL.c_str(), .layout = LAYOUT.c_str(), .variant = VARIANT.c_str(), .options = OPTIONS.c_str()};
 
@@ -929,7 +908,8 @@ void CInputManager::applyConfigToKeyboard(SKeyboard* pKeyboard) {
     g_pEventManager->postEvent(SHyprIPCEvent{"activelayout", pKeyboard->name + "," + LAYOUTSTR});
     EMIT_HOOK_EVENT("activeLayout", (std::vector<void*>{pKeyboard, (void*)&LAYOUTSTR}));
 
-    Debug::log(LOG, "Set the keyboard layout to {} and variant to {} for keyboard \"{}\"", rules.layout, rules.variant, pKeyboard->keyboard->name);
+    Debug::log(LOG, "Set the keyboard layout to {} and variant to {} for keyboard \"{}\"", pKeyboard->currentRules.layout, pKeyboard->currentRules.variant,
+               pKeyboard->keyboard->name);
 }
 
 void CInputManager::newMouse(wlr_input_device* mouse, bool virt) {
@@ -1066,23 +1046,40 @@ void CInputManager::setPointerConfigs() {
             libinput_device_config_accel_set_speed(LIBINPUTDEV, LIBINPUTSENS);
 
             const auto ACCELPROFILE = g_pConfigManager->getDeviceString(devname, "accel_profile", "input:accel_profile");
+            const auto SCROLLPOINTS = g_pConfigManager->getDeviceString(devname, "scroll_points", "input:scroll_points");
 
-            if (ACCELPROFILE == "") {
+            if (ACCELPROFILE.empty()) {
                 libinput_device_config_accel_set_profile(LIBINPUTDEV, libinput_device_config_accel_get_default_profile(LIBINPUTDEV));
             } else if (ACCELPROFILE == "adaptive") {
                 libinput_device_config_accel_set_profile(LIBINPUTDEV, LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE);
             } else if (ACCELPROFILE == "flat") {
                 libinput_device_config_accel_set_profile(LIBINPUTDEV, LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT);
             } else if (ACCELPROFILE.starts_with("custom")) {
-                CVarList args = {ACCELPROFILE, 0, ' '};
+                CVarList accelValues = {ACCELPROFILE, 0, ' '};
+
                 try {
-                    double              step = std::stod(args[1]);
-                    std::vector<double> points;
-                    for (size_t i = 2; i < args.size(); ++i)
-                        points.push_back(std::stod(args[i]));
+                    double              accelStep = std::stod(accelValues[1]);
+                    std::vector<double> accelPoints;
+                    for (size_t i = 2; i < accelValues.size(); ++i) {
+                        accelPoints.push_back(std::stod(accelValues[i]));
+                    }
 
                     const auto CONFIG = libinput_config_accel_create(LIBINPUT_CONFIG_ACCEL_PROFILE_CUSTOM);
-                    libinput_config_accel_set_points(CONFIG, LIBINPUT_ACCEL_TYPE_MOTION, step, points.size(), points.data());
+
+                    if (!SCROLLPOINTS.empty()) {
+                        CVarList scrollValues = {SCROLLPOINTS, 0, ' '};
+                        try {
+                            double              scrollStep = std::stod(scrollValues[0]);
+                            std::vector<double> scrollPoints;
+                            for (size_t i = 1; i < scrollValues.size(); ++i) {
+                                scrollPoints.push_back(std::stod(scrollValues[i]));
+                            }
+
+                            libinput_config_accel_set_points(CONFIG, LIBINPUT_ACCEL_TYPE_SCROLL, scrollStep, scrollPoints.size(), scrollPoints.data());
+                        } catch (std::exception& e) { Debug::log(ERR, "Invalid values in scroll_points"); }
+                    }
+
+                    libinput_config_accel_set_points(CONFIG, LIBINPUT_ACCEL_TYPE_MOTION, accelStep, accelPoints.size(), accelPoints.data());
                     libinput_device_config_accel_apply(LIBINPUTDEV, CONFIG);
                     libinput_config_accel_destroy(CONFIG);
                 } catch (std::exception& e) { Debug::log(ERR, "Invalid values in custom accel profile"); }
@@ -1494,7 +1491,10 @@ void CInputManager::setTabletConfigs() {
         if (wlr_input_device_is_libinput(t.wlrDevice)) {
             const auto LIBINPUTDEV = (libinput_device*)wlr_libinput_get_device_handle(t.wlrDevice);
 
-            const int  ROTATION = std::clamp(g_pConfigManager->getDeviceInt(t.name, "transform", "input:tablet:transform"), 0, 7);
+            const auto RELINPUT = g_pConfigManager->getDeviceInt(t.name, "relative_input", "input:tablet:relative_input");
+            t.relativeInput     = RELINPUT;
+
+            const int ROTATION = std::clamp(g_pConfigManager->getDeviceInt(t.name, "transform", "input:tablet:transform"), 0, 7);
             Debug::log(LOG, "Setting calibration matrix for device {}", t.name);
             libinput_device_config_calibration_set_matrix(LIBINPUTDEV, MATRICES[ROTATION]);
 
@@ -1566,7 +1566,7 @@ void CInputManager::destroySwitch(SSwitchDevice* pDevice) {
 }
 
 void CInputManager::setCursorImageUntilUnset(std::string name) {
-    g_pHyprRenderer->setCursorFromName(name.c_str());
+    g_pHyprRenderer->setCursorFromName(name);
     m_bCursorImageOverridden   = true;
     m_sCursorSurfaceInfo.inUse = false;
 }
@@ -1657,7 +1657,7 @@ void CInputManager::setCursorIconOnBorder(CWindow* w) {
     CBox                 box              = w->getWindowMainSurfaceBox();
     eBorderIconDirection direction        = BORDERICON_NONE;
     CBox                 boxFullGrabInput = {box.x - *PEXTENDBORDERGRAB - BORDERSIZE, box.y - *PEXTENDBORDERGRAB - BORDERSIZE, box.width + 2 * (*PEXTENDBORDERGRAB + BORDERSIZE),
-                             box.height + 2 * (*PEXTENDBORDERGRAB + BORDERSIZE)};
+                                             box.height + 2 * (*PEXTENDBORDERGRAB + BORDERSIZE)};
 
     if (w->hasPopupAt(mouseCoords))
         direction = BORDERICON_NONE;

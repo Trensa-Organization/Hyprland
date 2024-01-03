@@ -97,6 +97,8 @@ struct SRenderData {
 
     // for calculating UV
     CWindow* pWindow = nullptr;
+
+    bool     popup = false;
 };
 
 struct SExtensionFindingData {
@@ -180,7 +182,8 @@ struct SConstraint {
     Vector2D getLogicConstraintPos();
     Vector2D getLogicConstraintSize();
 
-    bool     operator==(const SConstraint& b) const {
+    //
+    bool operator==(const SConstraint& b) const {
         return constraint == b.constraint;
     }
 };
@@ -251,6 +254,8 @@ struct STablet {
     wlr_tablet*           wlrTablet   = nullptr;
     wlr_tablet_v2_tablet* wlrTabletV2 = nullptr;
     wlr_input_device*     wlrDevice   = nullptr;
+
+    bool                  relativeInput = false;
 
     std::string           name = "";
 

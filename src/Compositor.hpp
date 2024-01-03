@@ -29,8 +29,7 @@
 #include "plugins/PluginSystem.hpp"
 #include "helpers/Watchdog.hpp"
 
-enum eManagersInitStage
-{
+enum eManagersInitStage {
     STAGE_PRIORITY = 0,
     STAGE_LATE
 };
@@ -166,13 +165,15 @@ class CCompositor {
     void           changeWindowZOrder(CWindow*, bool);
     void           cleanupFadingOut(const int& monid);
     CWindow*       getWindowInDirection(CWindow*, char);
-    CWindow*       getNextWindowOnWorkspace(CWindow*, bool focusableOnly = false);
-    CWindow*       getPrevWindowOnWorkspace(CWindow*, bool focusableOnly = false);
+    CWindow*       getNextWindowOnWorkspace(CWindow*, bool focusableOnly = false, std::optional<bool> floating = {});
+    CWindow*       getPrevWindowOnWorkspace(CWindow*, bool focusableOnly = false, std::optional<bool> floating = {});
     int            getNextAvailableNamedWorkspace();
     bool           isPointOnAnyMonitor(const Vector2D&);
+    bool           isPointOnReservedArea(const Vector2D& point, const CMonitor* monitor = nullptr);
     CWindow*       getConstraintWindow(SMouse*);
     CMonitor*      getMonitorInDirection(const char&);
     void           updateAllWindowsAnimatedDecorationValues();
+    void           updateWorkspaceWindows(const int64_t& id);
     void           updateWindowAnimatedDecorationValues(CWindow*);
     int            getNextAvailableMonitorID(std::string const& name);
     void           moveWorkspaceToMonitor(CWorkspace*, CMonitor*);
@@ -192,7 +193,6 @@ class CCompositor {
     void           closeWindow(CWindow*);
     Vector2D       parseWindowVectorArgsRelative(const std::string&, const Vector2D&);
     void           forceReportSizesToWindowsOnWorkspace(const int&);
-    bool           cursorOnReservedArea();
     CWorkspace*    createNewWorkspace(const int&, const int&, const std::string& name = ""); // will be deleted next frame if left empty and unfocused!
     void           renameWorkspace(const int&, const std::string& name = "");
     void           setActiveMonitor(CMonitor*);
@@ -208,6 +208,7 @@ class CCompositor {
     void           leaveUnsafeState();
     void           setPreferredScaleForSurface(wlr_surface* pSurface, double scale);
     void           setPreferredTransformForSurface(wlr_surface* pSurface, wl_output_transform transform);
+    void           updateSuspendedStates();
 
     std::string    explicitConfigPath;
 

@@ -751,6 +751,7 @@ void CKeybindManager::toggleActiveFloating(std::string args) {
         while (curr != PCURRENT) {
             curr->m_bIsFloating = PCURRENT->m_bIsFloating;
             curr->updateDynamicRules();
+            curr->updateSpecialRenderData();
             curr = curr->m_sGroupData.pNextWindow;
         }
     } else {
@@ -800,9 +801,13 @@ void CKeybindManager::changeworkspace(std::string args) {
     static auto* const PALLOWWORKSPACECYCLES = &g_pConfigManager->getConfigValuePtr("binds:allow_workspace_cycles")->intValue;
     static auto* const PWORKSPACECENTERON    = &g_pConfigManager->getConfigValuePtr("binds:workspace_center_on")->intValue;
 
-    const auto         PMONITOR          = g_pCompositor->m_pLastMonitor;
-    const auto         PCURRENTWORKSPACE = g_pCompositor->getWorkspaceByID(PMONITOR->activeWorkspace);
-    const bool         EXPLICITPREVIOUS  = args.starts_with("previous");
+    const auto         PMONITOR = g_pCompositor->m_pLastMonitor;
+
+    if (!PMONITOR)
+        return;
+
+    const auto PCURRENTWORKSPACE = g_pCompositor->getWorkspaceByID(PMONITOR->activeWorkspace);
+    const bool EXPLICITPREVIOUS  = args.starts_with("previous");
 
     if (args.starts_with("previous")) {
         // Do nothing if there's no previous workspace, otherwise switch to it.
@@ -875,10 +880,12 @@ void CKeybindManager::changeworkspace(std::string args) {
     } else
         pWorkspaceToChangeTo->rememberPrevWorkspace(PCURRENTWORKSPACE);
 
-    if (!g_pCompositor->m_pLastFocus)
-        g_pInputManager->simulateMouseMovement();
-    else
-        g_pInputManager->sendMotionEventsToFocused();
+    if (!g_pInputManager->m_bLastFocusOnLS) {
+        if (g_pCompositor->m_pLastFocus)
+            g_pInputManager->sendMotionEventsToFocused();
+        else
+            g_pInputManager->simulateMouseMovement();
+    }
 }
 
 void CKeybindManager::fullscreenActive(std::string args) {
@@ -1567,10 +1574,18 @@ void CKeybindManager::circleNext(std::string arg) {
         return;
     }
 
-    if (arg == "last" || arg == "l" || arg == "prev" || arg == "p")
-        switchToWindow(g_pCompositor->getPrevWindowOnWorkspace(g_pCompositor->m_pLastWindow, true));
+    CVarList            args{arg, 0, 's', true};
+
+    std::optional<bool> floatStatus = {};
+    if (args.contains("tile") || args.contains("tiled"))
+        floatStatus = false;
+    else if (args.contains("float") || args.contains("floating"))
+        floatStatus = true;
+
+    if (args.contains("prev") || args.contains("p") || args.contains("last") || args.contains("l"))
+        switchToWindow(g_pCompositor->getPrevWindowOnWorkspace(g_pCompositor->m_pLastWindow, true, floatStatus));
     else
-        switchToWindow(g_pCompositor->getNextWindowOnWorkspace(g_pCompositor->m_pLastWindow, true));
+        switchToWindow(g_pCompositor->getNextWindowOnWorkspace(g_pCompositor->m_pLastWindow, true, floatStatus));
 }
 
 void CKeybindManager::focusWindow(std::string regexp) {
@@ -1828,17 +1843,8 @@ void CKeybindManager::mouse(std::string args) {
             const auto mouseCoords = g_pInputManager->getMouseCoordsInternal();
             CWindow*   pWindow     = g_pCompositor->vectorToWindowIdeal(mouseCoords);
 
-            if (pWindow && !pWindow->m_bIsFullscreen && !pWindow->hasPopupAt(mouseCoords)) {
-                for (auto& wd : pWindow->m_dWindowDecorations) {
-                    if (!(wd->getDecorationFlags() & DECORATION_ALLOWS_MOUSE_INPUT))
-                        continue;
-
-                    if (g_pDecorationPositioner->getWindowDecorationBox(wd.get()).containsPoint(mouseCoords)) {
-                        wd->onBeginWindowDragOnDeco(mouseCoords);
-                        break;
-                    }
-                }
-            }
+            if (pWindow && !pWindow->m_bIsFullscreen)
+                pWindow->checkInputOnDecos(INPUT_TYPE_DRAG_START, mouseCoords);
 
             if (!g_pInputManager->currentlyDraggedWindow)
                 g_pInputManager->currentlyDraggedWindow = pWindow;
@@ -1914,8 +1920,7 @@ void CKeybindManager::fakeFullscreenActive(std::string args) {
     if (g_pCompositor->m_pLastWindow) {
         // will also set the flag
         g_pCompositor->m_pLastWindow->m_bFakeFullscreenState = !g_pCompositor->m_pLastWindow->m_bFakeFullscreenState;
-        g_pXWaylandManager->setWindowFullscreen(g_pCompositor->m_pLastWindow,
-                                                g_pCompositor->m_pLastWindow->m_bFakeFullscreenState || g_pCompositor->m_pLastWindow->m_bIsFullscreen);
+        g_pXWaylandManager->setWindowFullscreen(g_pCompositor->m_pLastWindow, g_pCompositor->m_pLastWindow->shouldSendFullscreenState());
     }
 }
 

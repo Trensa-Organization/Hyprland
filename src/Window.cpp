@@ -2,6 +2,7 @@
 #include "Compositor.hpp"
 #include "render/decorations/CHyprDropShadowDecoration.hpp"
 #include "render/decorations/CHyprGroupBarDecoration.hpp"
+#include "render/decorations/CHyprBorderDecoration.hpp"
 
 CWindow::CWindow() {
     m_vRealPosition.create(AVARTYPE_VECTOR, g_pConfigManager->getAnimationPropertyConfig("windowsIn"), (void*)this, AVARDAMAGE_ENTIRE);
@@ -14,6 +15,7 @@ CWindow::CWindow() {
     m_fDimPercent.create(AVARTYPE_FLOAT, g_pConfigManager->getAnimationPropertyConfig("fadeDim"), (void*)this, AVARDAMAGE_ENTIRE);
 
     addWindowDeco(std::make_unique<CHyprDropShadowDecoration>(this));
+    addWindowDeco(std::make_unique<CHyprBorderDecoration>(this));
 }
 
 CWindow::~CWindow() {
@@ -220,6 +222,30 @@ void CWindow::removeWindowDeco(IHyprWindowDecoration* deco) {
     g_pLayoutManager->getCurrentLayout()->recalculateWindow(this);
 }
 
+void CWindow::uncacheWindowDecos() {
+    for (auto& wd : m_dWindowDecorations) {
+        g_pDecorationPositioner->uncacheDecoration(wd.get());
+    }
+}
+
+bool CWindow::checkInputOnDecos(const eInputType type, const Vector2D& mouseCoords, std::any data) {
+    if (type != INPUT_TYPE_DRAG_END && hasPopupAt(mouseCoords))
+        return false;
+
+    for (auto& wd : m_dWindowDecorations) {
+        if (!(wd->getDecorationFlags() & DECORATION_ALLOWS_MOUSE_INPUT))
+            continue;
+
+        if (!g_pDecorationPositioner->getWindowDecorationBox(wd.get()).containsPoint(mouseCoords))
+            continue;
+
+        if (wd->onInputOnDeco(type, mouseCoords, data))
+            return true;
+    }
+
+    return false;
+}
+
 pid_t CWindow::getPID() {
     pid_t PID = -1;
     if (!m_bIsX11) {
@@ -229,7 +255,7 @@ pid_t CWindow::getPID() {
 
         wl_client_get_credentials(wl_resource_get_client(m_uSurface.xdg->resource), &PID, nullptr, nullptr);
     } else {
-        if (!m_bIsMapped || !m_bMappedX11)
+        if (!m_bIsMapped)
             return -1;
 
         PID = m_uSurface.xwayland->pid;
@@ -320,7 +346,7 @@ void sendLeaveIter(wlr_surface* pSurface, int x, int y, void* data) {
 }
 
 void CWindow::updateSurfaceOutputs() {
-    if (m_iLastSurfaceMonitorID == m_iMonitorID || !m_bIsMapped || m_bHidden || !m_bMappedX11)
+    if (m_iLastSurfaceMonitorID == m_iMonitorID || !m_bIsMapped || m_bHidden)
         return;
 
     const auto PLASTMONITOR = g_pCompositor->getMonitorFromID(m_iLastSurfaceMonitorID);
@@ -446,6 +472,8 @@ void CWindow::onUnmap() {
 
     if (PMONITOR && PMONITOR->solitaryClient == this)
         PMONITOR->solitaryClient = nullptr;
+
+    g_pCompositor->updateWorkspaceWindows(m_iWorkspaceID);
 }
 
 void CWindow::onMap() {
@@ -507,6 +535,8 @@ void CWindow::setHidden(bool hidden) {
     if (hidden && g_pCompositor->m_pLastWindow == this) {
         g_pCompositor->m_pLastWindow = nullptr;
     }
+
+    setSuspended(hidden);
 }
 
 bool CWindow::isHidden() {
@@ -964,7 +994,7 @@ float CWindow::rounding() {
 
     float              rounding = m_sAdditionalConfigData.rounding.toUnderlying() == -1 ? *PROUNDING : m_sAdditionalConfigData.rounding.toUnderlying();
 
-    return rounding;
+    return m_sSpecialRenderData.rounding ? rounding : 0;
 }
 
 void CWindow::updateSpecialRenderData() {
@@ -997,4 +1027,20 @@ int CWindow::getRealBorderSize() {
 
 bool CWindow::canBeTorn() {
     return (m_sAdditionalConfigData.forceTearing.toUnderlying() || m_bTearingHint) && g_pHyprRenderer->m_bTearingEnvSatisfied;
+}
+
+bool CWindow::shouldSendFullscreenState() {
+    const auto MODE = g_pCompositor->getWorkspaceByID(m_iWorkspaceID)->m_efFullscreenMode;
+    return m_bFakeFullscreenState || (m_bIsFullscreen && (MODE == FULLSCREEN_FULL));
+}
+
+void CWindow::setSuspended(bool suspend) {
+    if (suspend == m_bSuspended)
+        return;
+
+    if (m_bIsX11)
+        return;
+
+    wlr_xdg_toplevel_set_suspended(m_uSurface.xdg->toplevel, suspend);
+    m_bSuspended = suspend;
 }

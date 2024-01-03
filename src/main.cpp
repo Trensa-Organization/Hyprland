@@ -56,19 +56,21 @@ int main(int argc, char** argv) {
 
                 return 1;
             }
-            std::string next_arg = std::next(it)->c_str();
+            configPath = std::next(it)->c_str();
 
-            if (std::filesystem::is_symlink(next_arg))
-                next_arg = std::filesystem::read_symlink(next_arg);
+            try {
+                configPath = std::filesystem::canonical(configPath);
 
-            if (!std::filesystem::is_regular_file(next_arg)) {
-                std::cerr << "[ ERROR ] Config file '" << next_arg << "' doesn't exist!\n";
+                if (!std::filesystem::is_regular_file(configPath)) {
+                    throw std::exception();
+                }
+            } catch (...) {
+                std::cerr << "[ ERROR ] Config file '" << configPath << "' doesn't exist!\n";
                 help();
 
                 return 1;
             }
 
-            configPath = std::filesystem::weakly_canonical(next_arg);
             Debug::log(LOG, "User-specified config location: '{}'", configPath);
 
             it++;
@@ -104,7 +106,7 @@ int main(int argc, char** argv) {
 
     g_pCompositor->initServer();
 
-    if (!getenv("HYPRLAND_NO_RT") || configStringToInt(std::string(getenv("HYPRLAND_NO_RT"))) == 0)
+    if (!envEnabled("HYPRLAND_NO_RT"))
         Init::gainRealTime();
 
     Debug::log(LOG, "Hyprland init finished.");

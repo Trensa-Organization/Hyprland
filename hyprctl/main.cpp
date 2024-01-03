@@ -23,39 +23,49 @@
 #include <filesystem>
 #include <stdarg.h>
 
-const std::string USAGE = R"#(usage: hyprctl [(opt)flags] [command] [(opt)args]
-
-commands:
-    activewindow
-    activeworkspace
-    binds
-    clients
-    cursorpos
-    devices
-    dispatch
-    getoption
-    globalshortcuts
-    hyprpaper
-    instances
-    keyword
-    kill
-    layers
-    layouts
-    monitors
-    notify
-    plugin
-    reload
-    setcursor
-    seterror
-    setprop
-    splash
-    switchxkblayout
-    version
-    workspacerules
-    workspaces
-
-flags:
+const std::string USAGE = R"#(usage:  hyprctl [flags] [<command> [args]]
+        hyprctl --batch {<command 1> [args] ; <command 2> [args] ; ...}
+LISTING COMMANDS:
+    monitors:           List outputs
+    workspaces:         List all workspaces
+    activeworkspace:    Get currently active workspace
+    clients:            List clients (e.g. windows)
+    activewindow:       Get currently active window
+    layers:             List layers
+    animations:         List animations and bezier curves in use
+    devices:            List devices
+    binds:              List registered binds
+    instances:          List running Hyprland instances
+    layouts:            List layouts
+    globalshortcuts:    List global shortcuts
+    version:            Print hyprland version
+CONFIGURATION COMMANDS:
+    keyword <keyword> [args]:   Execute a keyword
+    getoption <option>:         Get value of <option>
+    reload:                     Reload configurations
+PLUGIN:
+    plugin list:            List loaded plugins
+    plugin load <path>:     Load plugin from <path>
+    plugin unload <path>:   Unload plugin at <path>
+THEMING:
+    hyprpaper <keywords>        Issue hyprpaper keywords using IPC
+    splash:                     Prints the current random splash
+    cursorpos:                  Get the current cursor position in global layout coordinates
+    setcursor <theme> <size>:   Set cursor theme and size, (except for GTK)
+ADDITIONAL COMMANDS:
+    dispatch <name> [args]:     Run a dispatcher
+    kill:                       Enter kill mode, where you can kill an app by clicking on it,
+                                use ESCAPE to quit kill mode
+    switchxkblayout <args>:     Sets the xkb layout index for a keyboard, see wiki for details
+    setprop <window> <prop>:    Set window property, see wiki for details
+    seterror <color> <msg>:     Display <msg> as a error message, will reset upon reloading config
+    seterror disable:           Clear error message
+    notify <icon> <time_ms> <color> <message>:
+                                Sends a notification using the built-in Hyprland notification system.
+    output <args>:              Add and remove fake outputs to specified backend, see wiki for details.
+FLAGS:
     -j -> output in JSON
+    --help -> display this help
     --batch -> execute a batch of commands, separated by ';'
     --instance (-i) -> use a specific instance. Can be either signature or index in hyprctl instances (0, 1, etc)
 )#";
@@ -330,6 +340,12 @@ int main(int argc, char** argv) {
 
     fullRequest = fullArgs + "/" + fullRequest;
 
+    // instances is HIS-independent
+    if (fullRequest.contains("/instances")) {
+        instancesRequest(json);
+        return 0;
+    }
+
     if (overrideInstance.contains("_"))
         instanceSignature = overrideInstance;
     else if (!overrideInstance.empty()) {
@@ -399,8 +415,6 @@ int main(int argc, char** argv) {
         request(fullRequest);
     else if (fullRequest.contains("/rollinglog"))
         request(fullRequest);
-    else if (fullRequest.contains("/instances"))
-        instancesRequest(json);
     else if (fullRequest.contains("/switchxkblayout"))
         request(fullRequest, 2);
     else if (fullRequest.contains("/seterror"))
@@ -419,6 +433,8 @@ int main(int argc, char** argv) {
         request(fullRequest, 1);
     else if (fullRequest.contains("/keyword"))
         request(fullRequest, 2);
+    else if (fullRequest.contains("/decorations"))
+        request(fullRequest, 1);
     else if (fullRequest.contains("/hyprpaper"))
         requestHyprpaper(fullRequest);
     else if (fullRequest.contains("/layouts"))

@@ -30,8 +30,7 @@ inline const float fullVerts[] = {
 };
 inline const float fanVertsFull[] = {-1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f};
 
-enum eDiscardMode
-{
+enum eDiscardMode {
     DISCARD_OPAQUE = 1,
     DISCARD_ALPHA  = 1 << 1
 };
@@ -120,7 +119,7 @@ class CHyprOpenGLImpl {
     void                  end();
 
     void                  renderRect(CBox*, const CColor&, int round = 0);
-    void                  renderRectWithBlur(CBox*, const CColor&, int round = 0, float blurA = 1.f);
+    void                  renderRectWithBlur(CBox*, const CColor&, int round = 0, float blurA = 1.f, bool xray = false);
     void                  renderRectWithDamage(CBox*, const CColor&, CRegion* damage, int round = 0);
     void                  renderTexture(wlr_texture*, CBox*, float a, int round = 0, bool allowCustomUV = false);
     void                  renderTexture(const CTexture&, CBox*, float a, int round = 0, bool discardActive = false, bool allowCustomUV = false);
@@ -142,6 +141,7 @@ class CHyprOpenGLImpl {
     void                  makeLayerSnapshot(SLayerSurface*);
     void                  renderSnapshot(CWindow**);
     void                  renderSnapshot(SLayerSurface**);
+    bool                  shouldUseNewBlurOptimizations(SLayerSurface* pLayer, CWindow* pWindow);
 
     void                  clear(const CColor&);
     void                  clearWithTex();
@@ -222,8 +222,6 @@ class CHyprOpenGLImpl {
     void          renderSplash(cairo_t* const, cairo_surface_t* const, double);
 
     void          preBlurForCurrentMonitor();
-
-    bool          shouldUseNewBlurOptimizations(SLayerSurface* pLayer, CWindow* pWindow);
 
     bool          passRequiresIntrospection(CMonitor* pMonitor);
 

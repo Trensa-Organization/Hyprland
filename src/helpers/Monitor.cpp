@@ -533,24 +533,24 @@ void CMonitor::changeWorkspace(CWorkspace* const pWorkspace, bool internal, bool
             }
         }
 
-        static auto* const PFOLLOWMOUSE = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
+        if (!g_pCompositor->m_pLastMonitor->specialWorkspaceID) {
+            static auto* const PFOLLOWMOUSE = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
+            CWindow*           pWindow      = pWorkspace->getLastFocusedWindow();
 
-        if (const auto PLASTWINDOW = pWorkspace->getLastFocusedWindow(); PLASTWINDOW)
-            g_pCompositor->focusWindow(PLASTWINDOW);
-        else {
-            CWindow* pWindow = nullptr;
+            if (!pWindow) {
+                if (*PFOLLOWMOUSE == 1)
+                    pWindow = g_pCompositor->vectorToWindowIdeal(g_pInputManager->getMouseCoordsInternal());
 
-            if (*PFOLLOWMOUSE == 1)
-                pWindow = g_pCompositor->vectorToWindowIdeal(g_pInputManager->getMouseCoordsInternal());
+                if (!pWindow)
+                    pWindow = g_pCompositor->getTopLeftWindowOnWorkspace(pWorkspace->m_iID);
 
-            if (!pWindow)
-                pWindow = g_pCompositor->getTopLeftWindowOnWorkspace(pWorkspace->m_iID);
-
-            if (!pWindow)
-                pWindow = g_pCompositor->getFirstWindowOnWorkspace(pWorkspace->m_iID);
+                if (!pWindow)
+                    pWindow = g_pCompositor->getFirstWindowOnWorkspace(pWorkspace->m_iID);
+            }
 
             g_pCompositor->focusWindow(pWindow);
         }
+
         if (!noMouseMove)
             g_pInputManager->simulateMouseMovement();
 
@@ -565,6 +565,8 @@ void CMonitor::changeWorkspace(CWorkspace* const pWorkspace, bool internal, bool
     g_pCompositor->updateFullscreenFadeOnWorkspace(pWorkspace);
 
     g_pConfigManager->ensureVRR(this);
+
+    g_pCompositor->updateSuspendedStates();
 }
 
 void CMonitor::changeWorkspace(const int& id, bool internal) {
@@ -589,6 +591,8 @@ void CMonitor::setSpecialWorkspace(CWorkspace* const pWorkspace) {
             g_pCompositor->focusWindow(PLAST);
         else
             g_pInputManager->refocus();
+
+        g_pCompositor->updateSuspendedStates();
 
         return;
     }
@@ -618,6 +622,22 @@ void CMonitor::setSpecialWorkspace(CWorkspace* const pWorkspace) {
         if (w->m_iWorkspaceID == pWorkspace->m_iID) {
             w->m_iMonitorID = ID;
             w->updateSurfaceOutputs();
+
+            const auto MIDDLE = w->middle();
+            if (w->m_bIsFloating && !VECINRECT(MIDDLE, vecPosition.x, vecPosition.y, vecPosition.x + vecSize.x, vecPosition.y + vecSize.y) && w->m_iX11Type != 2) {
+                // if it's floating and the middle isnt on the current mon, move it to the center
+                const auto PMONFROMMIDDLE = g_pCompositor->getMonitorFromVector(MIDDLE);
+                Vector2D   pos            = w->m_vRealPosition.goalv();
+                if (!VECINRECT(MIDDLE, PMONFROMMIDDLE->vecPosition.x, PMONFROMMIDDLE->vecPosition.y, PMONFROMMIDDLE->vecPosition.x + PMONFROMMIDDLE->vecSize.x,
+                               PMONFROMMIDDLE->vecPosition.y + PMONFROMMIDDLE->vecSize.y)) {
+                    // not on any monitor, center
+                    pos = middle() / 2.f - w->m_vRealSize.goalv() / 2.f;
+                } else
+                    pos = pos - PMONFROMMIDDLE->vecPosition + vecPosition;
+
+                w->m_vRealPosition = pos;
+                w->m_vPosition     = pos;
+            }
         }
     }
 
@@ -631,6 +651,8 @@ void CMonitor::setSpecialWorkspace(CWorkspace* const pWorkspace) {
     g_pEventManager->postEvent(SHyprIPCEvent{"activespecial", pWorkspace->m_szName + "," + szName});
 
     g_pHyprRenderer->damageMonitor(this);
+
+    g_pCompositor->updateSuspendedStates();
 }
 
 void CMonitor::setSpecialWorkspace(const int& id) {

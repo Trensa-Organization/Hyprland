@@ -583,14 +583,14 @@ void CHyprOpenGLImpl::renderRect(CBox* box, const CColor& col, int round) {
         renderRectWithDamage(box, col, &m_RenderData.damage, round);
 }
 
-void CHyprOpenGLImpl::renderRectWithBlur(CBox* box, const CColor& col, int round, float blurA) {
+void CHyprOpenGLImpl::renderRectWithBlur(CBox* box, const CColor& col, int round, float blurA, bool xray) {
     if (m_RenderData.damage.empty())
         return;
 
     CRegion damage{m_RenderData.damage};
     damage.intersect(*box);
 
-    CFramebuffer* POUTFB = blurMainFramebufferWithDamage(blurA, &damage);
+    CFramebuffer* POUTFB = xray ? &m_RenderData.pCurrentMonData->blurFB : blurMainFramebufferWithDamage(blurA, &damage);
 
     m_RenderData.currentFB->bind();
 
@@ -1232,6 +1232,9 @@ void CHyprOpenGLImpl::preRender(CMonitor* pMonitor) {
 
         if (pWindow->m_sAdditionalConfigData.forceNoBlur)
             return false;
+
+        if (pWindow->m_pWLSurface.small() && !pWindow->m_pWLSurface.m_bFillIgnoreSmall)
+            return true;
 
         const auto  PSURFACE = pWindow->m_pWLSurface.wlr();
 
@@ -1894,11 +1897,15 @@ void CHyprOpenGLImpl::renderSplash(cairo_t* const CAIRO, cairo_surface_t* const 
 void CHyprOpenGLImpl::createBGTextureForMonitor(CMonitor* pMonitor) {
     RASSERT(m_RenderData.pMonitor, "Tried to createBGTex without begin()!");
 
+    static auto* const PRENDERTEX      = &g_pConfigManager->getConfigValuePtr("misc:disable_hyprland_logo")->intValue;
     static auto* const PNOSPLASH       = &g_pConfigManager->getConfigValuePtr("misc:disable_splash_rendering")->intValue;
     static auto* const PFORCEHYPRCHAN  = &g_pConfigManager->getConfigValuePtr("misc:force_hypr_chan")->intValue;
     static auto* const PFORCEWALLPAPER = &g_pConfigManager->getConfigValuePtr("misc:force_default_wallpaper")->intValue;
 
     const auto         FORCEWALLPAPER = std::clamp(*PFORCEWALLPAPER, static_cast<int64_t>(-1L), static_cast<int64_t>(2L));
+
+    if (*PRENDERTEX)
+        return;
 
     // release the last tex if exists
     const auto PTEX = &m_mMonitorBGTextures[pMonitor];
@@ -2017,16 +2024,23 @@ void CHyprOpenGLImpl::clearWithTex() {
 void CHyprOpenGLImpl::destroyMonitorResources(CMonitor* pMonitor) {
     g_pHyprRenderer->makeEGLCurrent();
 
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].mirrorFB.release();
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].offloadFB.release();
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].mirrorSwapFB.release();
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].monitorMirrorFB.release();
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].blurFB.release();
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].offMainFB.release();
-    g_pHyprOpenGL->m_mMonitorRenderResources[pMonitor].stencilTex.destroyTexture();
-    g_pHyprOpenGL->m_mMonitorBGTextures[pMonitor].destroyTexture();
-    g_pHyprOpenGL->m_mMonitorRenderResources.erase(pMonitor);
-    g_pHyprOpenGL->m_mMonitorBGTextures.erase(pMonitor);
+    auto RESIT = g_pHyprOpenGL->m_mMonitorRenderResources.find(pMonitor);
+    if (RESIT != g_pHyprOpenGL->m_mMonitorRenderResources.end()) {
+        RESIT->second.mirrorFB.release();
+        RESIT->second.offloadFB.release();
+        RESIT->second.mirrorSwapFB.release();
+        RESIT->second.monitorMirrorFB.release();
+        RESIT->second.blurFB.release();
+        RESIT->second.offMainFB.release();
+        RESIT->second.stencilTex.destroyTexture();
+        g_pHyprOpenGL->m_mMonitorRenderResources.erase(RESIT);
+    }
+
+    auto TEXIT = g_pHyprOpenGL->m_mMonitorBGTextures.find(pMonitor);
+    if (TEXIT != g_pHyprOpenGL->m_mMonitorBGTextures.end()) {
+        TEXIT->second.destroyTexture();
+        g_pHyprOpenGL->m_mMonitorBGTextures.erase(TEXIT);
+    }
 
     Debug::log(LOG, "Monitor {} -> destroyed all render data", pMonitor->szName);
 }

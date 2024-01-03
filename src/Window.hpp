@@ -11,16 +11,14 @@
 #include "macros.hpp"
 #include "managers/XWaylandManager.hpp"
 
-enum eIdleInhibitMode
-{
+enum eIdleInhibitMode {
     IDLEINHIBIT_NONE = 0,
     IDLEINHIBIT_ALWAYS,
     IDLEINHIBIT_FULLSCREEN,
     IDLEINHIBIT_FOCUS
 };
 
-enum eGroupRules
-{
+enum eGroupRules {
     // effective only during first map, except for _ALWAYS variant
     GROUP_NONE        = 0,
     GROUP_SET         = 1 << 0, // Open as new group or add to focused group
@@ -153,11 +151,15 @@ struct SWindowRule {
     bool        v2 = false;
     std::string szTitle;
     std::string szClass;
-    int         bX11        = -1; // -1 means "ANY"
-    int         bFloating   = -1;
-    int         bFullscreen = -1;
-    int         bPinned     = -1;
-    std::string szWorkspace = ""; // empty means any
+    std::string szInitialTitle;
+    std::string szInitialClass;
+    int         bX11         = -1; // -1 means "ANY"
+    int         bFloating    = -1;
+    int         bFullscreen  = -1;
+    int         bPinned      = -1;
+    int         bFocus       = -1;
+    int         iOnWorkspace = -1;
+    std::string szWorkspace  = ""; // empty means any
 };
 
 class CWindow {
@@ -239,7 +241,6 @@ class CWindow {
 
     // XWayland stuff
     bool     m_bIsX11                = false;
-    bool     m_bMappedX11            = false;
     CWindow* m_pX11Parent            = nullptr;
     uint64_t m_iX11Type              = 0;
     bool     m_bIsModal              = false;
@@ -347,6 +348,8 @@ class CWindow {
     void                     addWindowDeco(std::unique_ptr<IHyprWindowDecoration> deco);
     void                     updateWindowDecos();
     void                     removeWindowDeco(IHyprWindowDecoration* deco);
+    void                     uncacheWindowDecos();
+    bool                     checkInputOnDecos(const eInputType, const Vector2D&, std::any = {});
     pid_t                    getPID();
     IHyprWindowDecoration*   getDecorationByType(eDecorationType);
     void                     removeDecorationByType(eDecorationType);
@@ -367,6 +370,8 @@ class CWindow {
     bool                     opaque();
     float                    rounding();
     bool                     canBeTorn();
+    bool                     shouldSendFullscreenState();
+    void                     setSuspended(bool suspend);
 
     int                      getRealBorderSize();
     void                     updateSpecialRenderData();
@@ -392,7 +397,8 @@ class CWindow {
 
   private:
     // For hidden windows and stuff
-    bool m_bHidden = false;
+    bool m_bHidden    = false;
+    bool m_bSuspended = false;
 };
 
 /**
