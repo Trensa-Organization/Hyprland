@@ -635,7 +635,7 @@ CWindow* CCompositor::vectorToWindowTiled(const Vector2D& pos) {
     if (PMONITOR->specialWorkspaceID) {
         for (auto& w : m_vWindows) {
             CBox box = {w->m_vPosition.x, w->m_vPosition.y, w->m_vSize.x, w->m_vSize.y};
-            if (w->m_iWorkspaceID == PMONITOR->specialWorkspaceID && box.containsPoint(pos) && !w->m_bIsFloating && !w->isHidden() && !w->m_bNoFocus)
+            if (w->m_iWorkspaceID == PMONITOR->specialWorkspaceID && box.containsPoint(pos) && !w->m_bIsFullscreen && !w->m_bIsFloating && !w->isHidden() && !w->m_bNoFocus)
                 return w.get();
         }
     }
@@ -747,7 +747,7 @@ CWindow* CCompositor::windowFromCursor() {
     if (PMONITOR->specialWorkspaceID) {
         for (auto& w : m_vWindows | std::views::reverse) {
             CBox box = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
-            if (w->m_bIsFloating && w->m_iWorkspaceID == PMONITOR->specialWorkspaceID && w->m_bIsMapped && box.containsPoint({m_sWLRCursor->x, m_sWLRCursor->y}) &&
+            if (w->m_bIsFullscreen && w->m_bIsFloating && w->m_iWorkspaceID == PMONITOR->specialWorkspaceID && w->m_bIsMapped && box.containsPoint({m_sWLRCursor->x, m_sWLRCursor->y}) &&
                 !w->isHidden() && !w->m_bNoFocus)
                 return w.get();
         }
