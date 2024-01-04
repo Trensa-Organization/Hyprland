@@ -8,22 +8,21 @@
 #include <chrono>
 #include <thread>
 
-const std::string HELP = R"#(┏ hyprpm, a Hyprland Plugin Manager
-┃
-┣ add [url]              → Install a new plugin repository from git
-┣ remove [url/name]      → Remove an installed plugin repository
-┣ enable [name]          → Enable a plugin
-┣ disable [name]         → Disable a plugin
-┣ update                 → Check and update all plugins if needed
-┣ reload                 → Reload hyprpm state. Ensure all enabled plugins are loaded.
-┣ list                   → List all installed plugins
-┃
-┣ Flags:
-┃
-┣ --notify       | -n    → Send a hyprland notification for important events (e.g. load fail)
-┣ --help         | -h    → Show this menu
-┣ --verbose      | -v    → Enable too much logging
-┗
+const std::string HELP = R"#(usage:  hyprpm [flags] [<command> [args]]
+
+LISTING COMMANDS:
+    add:                Install a new plugin repository from git
+    remove:             Remove an installed plugin repository
+    enable:             Enable a plugin
+    disable:            Disable a plugin
+    update:             Check and update all plugins if needed
+    reload:             Rreload hyprpm state. Ensure all enabled plugins are loaded.
+    list:               List all installed plugins
+FLAGS:
+    --notify -> Send a hyprland notification for important events (e.g. load fail)
+    --help -> display this help
+    --verbose -> Enable too much logging 
+    
 )#";
 
 int               main(int argc, char** argv, char** envp) {

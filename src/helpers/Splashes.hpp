@@ -26,6 +26,23 @@ inline const std::vector<std::string> SPLASHES = {
     "I see a red door and I want it painted black.",
     "Take on me, take me on...",
     "You spin me right round baby right round",
+    "Through the fire and the flames, we carry on!",
+    "Life could be a dream, sweetheart",
+    "We're off to never-never land",
+    "Just remember ALL CAPS when you spell the man name",
+    "The cake is a lie The cake is a lie The cake is a lie The cake is a lie",
+    "WE'RE SHAMELESS",
+    "Now I only want you gone",
+    "You Forget A Thousand Things Every Day Pal. Make Sure This Is One Of 'Em."
+    "The right man in the wrong place can make all the difference in the world."
+    "Truth Is, The Game Was Rigged From The Start."
+    "It's said war, war never changes. Men do, through the roads they walk."
+    "Victory shall be ours, it shall be swift, and it will be honest; purchased with blood."
+    "Patrolling the Mojave almost makes you wish for a nuclear winter."
+    "When life gives you lemons, don’t make lemonade…"
+    "You Picked The Wrong House, Fool!"
+    "I suck at life, but I bowl like an angel."
+    "Swaying to the symphony... of destruction!",
     "Stayin' alive, stayin' alive",
     "Say no way, say no way ya, no way!",
     "Ground control to Major Tom...",
