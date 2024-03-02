@@ -219,7 +219,11 @@ void CHyprDwindleLayout::applyNodeDataToWindow(SDwindleNodeData* pNode, bool for
         // if special, we adjust the coords a bit
         static auto* const PSCALEFACTOR = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("dwindle:special_scale_factor");
 
-        CBox               wb = {calcPos + (calcSize - calcSize * **PSCALEFACTOR) / 2.f, calcSize * **PSCALEFACTOR};
+        CBox               wb;
+        if (PWINDOW->m_bIsFullscreen)
+            wb = {calcPos, calcSize};
+        else
+            wb = {calcPos + (calcSize - calcSize * **PSCALEFACTOR) / 2.f, calcSize * **PSCALEFACTOR};
         wb.round(); // avoid rounding mess
 
         PWINDOW->m_vRealPosition = wb.pos();
@@ -791,7 +795,7 @@ void CHyprDwindleLayout::fullscreenRequestForWindow(CWindow* pWindow, eFullscree
     if (!g_pCompositor->windowValidMapped(pWindow))
         return;
 
-    if (on == pWindow->m_bIsFullscreen || g_pCompositor->isWorkspaceSpecial(pWindow->m_iWorkspaceID))
+    if (on == pWindow->m_bIsFullscreen)
         return; // ignore
 
     const auto PMONITOR   = g_pCompositor->getMonitorFromID(pWindow->m_iMonitorID);
@@ -853,8 +857,9 @@ void CHyprDwindleLayout::fullscreenRequestForWindow(CWindow* pWindow, eFullscree
             fakeNode.workspaceID = pWindow->m_iWorkspaceID;
             pWindow->m_vPosition = fakeNode.box.pos();
             pWindow->m_vSize     = fakeNode.box.size();
+            fakeNode.ignoreFullscreenChecks = true;
 
-            applyNodeDataToWindow(&fakeNode, true);
+            applyNodeDataToWindow(&fakeNode);
         }
     }
 
