@@ -34,10 +34,6 @@ int main(int argc, char** argv) {
     setenv("_JAVA_AWT_WM_NONREPARENTING", "1", 1);
     setenv("MOZ_ENABLE_WAYLAND", "1", 1);
     setenv("XDG_CURRENT_DESKTOP", "Hyprland", 1);
-    setenv("XDG_SESSION_TYPE", "wayland", 1); 
-    setenv("QT_QPA_PLATFORM", "wayland", 1);
-    setenv("SDL_VIDEODRIVER", "wayland", 1);
-    setenv("OZONE_PLATFORM", "wayland", 1);
 
     // parse some args
     std::string              configPath;
@@ -89,7 +85,7 @@ int main(int argc, char** argv) {
     }
 
     if (!ignoreSudo && Init::isSudo()) {
-        std::cerr << "[ ERROR ] Hyprland was launched with superuser priveleges, but the privileges check is not omitted.\n";
+        std::cerr << "[ ERROR ] Hyprland was launched with superuser privileges, but the privileges check is not omitted.\n";
         std::cerr << "          Hint: Use the --i-am-really-stupid flag to omit that check.\n";
 
         return 1;

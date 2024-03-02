@@ -139,35 +139,25 @@ CBox CWindow::getWindowIdealBoundingBoxIgnoreReserved() {
     return CBox{(int)POS.x, (int)POS.y, (int)SIZE.x, (int)SIZE.y};
 }
 
-CBox CWindow::getWindowInputBox() {
-    const int BORDERSIZE = getRealBorderSize();
+CBox CWindow::getWindowBoxUnified(uint64_t properties) {
 
     if (m_sAdditionalConfigData.dimAround) {
         const auto PMONITOR = g_pCompositor->getMonitorFromID(m_iMonitorID);
         return {PMONITOR->vecPosition.x, PMONITOR->vecPosition.y, PMONITOR->vecSize.x, PMONITOR->vecSize.y};
     }
 
-    SWindowDecorationExtents maxExtents = {{BORDERSIZE + 2, BORDERSIZE + 2}, {BORDERSIZE + 2, BORDERSIZE + 2}};
+    SWindowDecorationExtents EXTENTS = {{0, 0}, {0, 0}};
+    if (properties & RESERVED_EXTENTS)
+        EXTENTS.addExtents(g_pDecorationPositioner->getWindowDecorationReserved(this));
+    if (properties & INPUT_EXTENTS)
+        EXTENTS.addExtents(g_pDecorationPositioner->getWindowDecorationExtents(this, true));
+    if (properties & FULL_EXTENTS)
+        EXTENTS.addExtents(g_pDecorationPositioner->getWindowDecorationExtents(this, false));
 
-    const auto               EXTENTS = g_pDecorationPositioner->getWindowDecorationExtents(this, true);
+    CBox box = {m_vRealPosition.vec().x, m_vRealPosition.vec().y, m_vRealSize.vec().x, m_vRealSize.vec().y};
+    box.addExtents(EXTENTS);
 
-    if (EXTENTS.topLeft.x > maxExtents.topLeft.x)
-        maxExtents.topLeft.x = EXTENTS.topLeft.x;
-
-    if (EXTENTS.topLeft.y > maxExtents.topLeft.y)
-        maxExtents.topLeft.y = EXTENTS.topLeft.y;
-
-    if (EXTENTS.bottomRight.x > maxExtents.bottomRight.x)
-        maxExtents.bottomRight.x = EXTENTS.bottomRight.x;
-
-    if (EXTENTS.bottomRight.y > maxExtents.bottomRight.y)
-        maxExtents.bottomRight.y = EXTENTS.bottomRight.y;
-
-    // Add extents to the real base BB and return
-    CBox finalBox = {m_vRealPosition.vec().x - maxExtents.topLeft.x, m_vRealPosition.vec().y - maxExtents.topLeft.y,
-                     m_vRealSize.vec().x + maxExtents.topLeft.x + maxExtents.bottomRight.x, m_vRealSize.vec().y + maxExtents.topLeft.y + maxExtents.bottomRight.y};
-
-    return finalBox;
+    return box;
 }
 
 CBox CWindow::getWindowMainSurfaceBox() {
@@ -318,7 +308,7 @@ void CWindow::destroyToplevelHandle() {
 }
 
 void CWindow::updateToplevel() {
-    updateSurfaceOutputs();
+    updateSurfaceScaleTransformDetails();
 
     if (!m_phForeignToplevel)
         return;
@@ -345,8 +335,8 @@ void sendLeaveIter(wlr_surface* pSurface, int x, int y, void* data) {
     wlr_surface_send_leave(pSurface, OUTPUT);
 }
 
-void CWindow::updateSurfaceOutputs() {
-    if (m_iLastSurfaceMonitorID == m_iMonitorID || !m_bIsMapped || m_bHidden)
+void CWindow::updateSurfaceScaleTransformDetails() {
+    if (!m_bIsMapped || m_bHidden)
         return;
 
     const auto PLASTMONITOR = g_pCompositor->getMonitorFromID(m_iLastSurfaceMonitorID);
@@ -355,16 +345,23 @@ void CWindow::updateSurfaceOutputs() {
 
     const auto PNEWMONITOR = g_pCompositor->getMonitorFromID(m_iMonitorID);
 
-    if (PLASTMONITOR && PLASTMONITOR->m_bEnabled)
-        wlr_surface_for_each_surface(m_pWLSurface.wlr(), sendLeaveIter, PLASTMONITOR->output);
+    if (PNEWMONITOR != PLASTMONITOR) {
+        if (PLASTMONITOR && PLASTMONITOR->m_bEnabled)
+            wlr_surface_for_each_surface(m_pWLSurface.wlr(), sendLeaveIter, PLASTMONITOR->output);
 
-    wlr_surface_for_each_surface(m_pWLSurface.wlr(), sendEnterIter, PNEWMONITOR->output);
+        wlr_surface_for_each_surface(m_pWLSurface.wlr(), sendEnterIter, PNEWMONITOR->output);
+    }
 
     wlr_surface_for_each_surface(
         m_pWLSurface.wlr(),
         [](wlr_surface* surf, int x, int y, void* data) {
             const auto PMONITOR = g_pCompositor->getMonitorFromID(((CWindow*)data)->m_iMonitorID);
-            g_pCompositor->setPreferredScaleForSurface(surf, PMONITOR ? PMONITOR->scale : 1.f);
+
+            const auto PSURFACE = CWLSurface::surfaceFromWlr(surf);
+            if (PSURFACE && PSURFACE->m_fLastScale == PMONITOR->scale)
+                return;
+
+            g_pCompositor->setPreferredScaleForSurface(surf, PMONITOR->scale);
             g_pCompositor->setPreferredTransformForSurface(surf, PMONITOR->transform);
         },
         this);
@@ -374,7 +371,7 @@ void CWindow::moveToWorkspace(int workspaceID) {
     if (m_iWorkspaceID == workspaceID)
         return;
 
-    static auto* const PCLOSEONLASTSPECIAL = &g_pConfigManager->getConfigValuePtr("misc:close_special_on_empty")->intValue;
+    static auto* const PCLOSEONLASTSPECIAL = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:close_special_on_empty");
 
     const int          OLDWORKSPACE = m_iWorkspaceID;
 
@@ -397,7 +394,7 @@ void CWindow::moveToWorkspace(int workspaceID) {
     // update xwayland coords
     g_pXWaylandManager->setWindowSize(this, m_vRealSize.vec());
 
-    if (g_pCompositor->isWorkspaceSpecial(OLDWORKSPACE) && g_pCompositor->getWindowsOnWorkspace(OLDWORKSPACE) == 0 && *PCLOSEONLASTSPECIAL) {
+    if (g_pCompositor->isWorkspaceSpecial(OLDWORKSPACE) && g_pCompositor->getWindowsOnWorkspace(OLDWORKSPACE) == 0 && **PCLOSEONLASTSPECIAL) {
         const auto PWS = g_pCompositor->getWorkspaceByID(OLDWORKSPACE);
 
         if (PWS) {
@@ -440,7 +437,7 @@ void unregisterVar(void* ptr) {
 }
 
 void CWindow::onUnmap() {
-    static auto* const PCLOSEONLASTSPECIAL = &g_pConfigManager->getConfigValuePtr("misc:close_special_on_empty")->intValue;
+    static auto* const PCLOSEONLASTSPECIAL = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:close_special_on_empty");
 
     if (g_pCompositor->m_pLastWindow == this)
         g_pCompositor->m_pLastWindow = nullptr;
@@ -462,7 +459,7 @@ void CWindow::onUnmap() {
 
     hyprListener_unmapWindow.removeCallback();
 
-    if (*PCLOSEONLASTSPECIAL && g_pCompositor->getWindowsOnWorkspace(m_iWorkspaceID) == 0 && g_pCompositor->isWorkspaceSpecial(m_iWorkspaceID)) {
+    if (**PCLOSEONLASTSPECIAL && g_pCompositor->getWindowsOnWorkspace(m_iWorkspaceID) == 0 && g_pCompositor->isWorkspaceSpecial(m_iWorkspaceID)) {
         const auto PMONITOR = g_pCompositor->getMonitorFromID(m_iMonitorID);
         if (PMONITOR && PMONITOR->specialWorkspaceID == m_iWorkspaceID)
             PMONITOR->setSpecialWorkspace(nullptr);
@@ -511,6 +508,14 @@ void CWindow::onMap() {
                                           "CWindow");
 
     m_vReportedSize = m_vPendingReportedSize;
+
+    for (const auto& ctrl : g_pHyprRenderer->m_vTearingControllers) {
+        if (ctrl->pWlrHint->surface != m_pWLSurface.wlr())
+            continue;
+
+        m_bTearingHint = ctrl->pWlrHint->current;
+        break;
+    }
 }
 
 void CWindow::onBorderAngleAnimEnd(void* ptr) {
@@ -625,23 +630,22 @@ void CWindow::applyDynamicRule(const SWindowRule& r) {
                 if (active && token.contains("deg")) {
                     activeBorderGradient.m_fAngle = std::stoi(token.substr(0, token.size() - 3)) * (PI / 180.0);
                     active                        = false;
-                } else if (token.contains("deg")) {
+                } else if (token.contains("deg"))
                     inactiveBorderGradient.m_fAngle = std::stoi(token.substr(0, token.size() - 3)) * (PI / 180.0);
-                } else if (active) {
+                else if (active)
                     activeBorderGradient.m_vColors.push_back(configStringToInt(token));
-                } else {
+                else
                     inactiveBorderGradient.m_vColors.push_back(configStringToInt(token));
-                }
             }
 
-                        // Includes sanity checks for the number of colors in each gradient
-            if (activeBorderGradient.m_vColors.size() > 10 || inactiveBorderGradient.m_vColors.size() > 10) {
+            // Includes sanity checks for the number of colors in each gradient
+            if (activeBorderGradient.m_vColors.size() > 10 || inactiveBorderGradient.m_vColors.size() > 10)
                 Debug::log(WARN, "Bordercolor rule \"{}\" has more than 10 colors in one gradient, ignoring", r.szRule);
-            } else if (activeBorderGradient.m_vColors.empty()) {
+            else if (activeBorderGradient.m_vColors.empty())
                 Debug::log(WARN, "Bordercolor rule \"{}\" has no colors, ignoring", r.szRule);
-            } else if (inactiveBorderGradient.m_vColors.empty()) {
+            else if (inactiveBorderGradient.m_vColors.empty())
                 m_sSpecialRenderData.activeBorderColor = activeBorderGradient;
-            } else {
+            else {
                 m_sSpecialRenderData.activeBorderColor   = activeBorderGradient;
                 m_sSpecialRenderData.inactiveBorderColor = inactiveBorderGradient;
             }
@@ -1019,19 +1023,21 @@ bool CWindow::opaque() {
 }
 
 float CWindow::rounding() {
-    static auto* const PROUNDING = &g_pConfigManager->getConfigValuePtr("decoration:rounding")->intValue;
+    static auto* const PROUNDING = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:rounding");
 
-    float              rounding = m_sAdditionalConfigData.rounding.toUnderlying() == -1 ? *PROUNDING : m_sAdditionalConfigData.rounding.toUnderlying();
+    float              rounding = m_sAdditionalConfigData.rounding.toUnderlying() == -1 ? **PROUNDING : m_sAdditionalConfigData.rounding.toUnderlying();
 
     return m_sSpecialRenderData.rounding ? rounding : 0;
 }
 
 void CWindow::updateSpecialRenderData() {
-    const auto PWORKSPACE    = g_pCompositor->getWorkspaceByID(m_iWorkspaceID);
-    const auto WORKSPACERULE = PWORKSPACE ? g_pConfigManager->getWorkspaceRuleFor(PWORKSPACE) : SWorkspaceRule{};
-    bool       border        = true;
+    const auto          PWORKSPACE    = g_pCompositor->getWorkspaceByID(m_iWorkspaceID);
+    const auto          WORKSPACERULE = PWORKSPACE ? g_pConfigManager->getWorkspaceRuleFor(PWORKSPACE) : SWorkspaceRule{};
+    bool                border        = true;
 
-    if (m_bIsFloating && g_pConfigManager->getConfigValuePtr("general:no_border_on_floating")->intValue == 1)
+    static auto* const* PNOBORDERONFLOATING = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("general:no_border_on_floating");
+
+    if (m_bIsFloating && **PNOBORDERONFLOATING == 1)
         border = false;
 
     m_sSpecialRenderData.border     = WORKSPACERULE.border.value_or(border);
@@ -1051,16 +1057,18 @@ int CWindow::getRealBorderSize() {
     if (m_sSpecialRenderData.borderSize.toUnderlying() != -1)
         return m_sSpecialRenderData.borderSize.toUnderlying();
 
-    return g_pConfigManager->getConfigValuePtr("general:border_size")->intValue;
+    static auto* const* PBORDERSIZE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("general:border_size");
+
+    return **PBORDERSIZE;
 }
 
 bool CWindow::canBeTorn() {
-    return (m_sAdditionalConfigData.forceTearing.toUnderlying() || m_bTearingHint) && g_pHyprRenderer->m_bTearingEnvSatisfied;
+    return (m_sAdditionalConfigData.forceTearing.toUnderlying() || m_bTearingHint);
 }
 
 bool CWindow::shouldSendFullscreenState() {
     const auto MODE = g_pCompositor->getWorkspaceByID(m_iWorkspaceID)->m_efFullscreenMode;
-    return m_bFakeFullscreenState || (m_bIsFullscreen && (MODE == FULLSCREEN_FULL));
+    return m_bDontSendFullscreen ? false : (m_bFakeFullscreenState || (m_bIsFullscreen && (MODE == FULLSCREEN_FULL)));
 }
 
 void CWindow::setSuspended(bool suspend) {

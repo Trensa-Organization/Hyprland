@@ -178,6 +178,9 @@ void Events::listener_mapSubsurface(void* owner, void* data) {
     Debug::log(LOG, "Subsurface {:x} mapped", (uintptr_t)subsurface->pSubsurface);
 
     subsurface->pChild = createSubsurfaceNode(subsurface->pParent, subsurface, subsurface->pSubsurface->surface, subsurface->pWindowOwner);
+
+    if (subsurface->pWindowOwner)
+        subsurface->pWindowOwner->updateSurfaceScaleTransformDetails();
 }
 
 void Events::listener_unmapSubsurface(void* owner, void* data) {
@@ -222,8 +225,8 @@ void Events::listener_commitSubsurface(void* owner, void* data) {
     if (!g_pHyprRenderer->shouldRenderWindow(pNode->pWindowOwner)) {
         pNode->lastSize = pNode->pSurface->exists() ? Vector2D{pNode->pSurface->wlr()->current.width, pNode->pSurface->wlr()->current.height} : Vector2D{};
 
-        static auto* const PLOGDAMAGE = &g_pConfigManager->getConfigValuePtr("debug:log_damage")->intValue;
-        if (*PLOGDAMAGE)
+        static auto* const PLOGDAMAGE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("debug:log_damage");
+        if (**PLOGDAMAGE)
             Debug::log(LOG, "Refusing to commit damage from {} because it's invisible.", pNode->pWindowOwner);
         return;
     }
@@ -259,13 +262,11 @@ void Events::listener_commitSubsurface(void* owner, void* data) {
 
         // tearing: if solitary, redraw it. This still might be a single surface window
         const auto PMONITOR = g_pCompositor->getMonitorFromID(pNode->pWindowOwner->m_iMonitorID);
-        if (PMONITOR->solitaryClient == pNode->pWindowOwner && pNode->pWindowOwner->canBeTorn() && PMONITOR->tearingState.canTear &&
+        if (PMONITOR && PMONITOR->solitaryClient == pNode->pWindowOwner && pNode->pWindowOwner->canBeTorn() && PMONITOR->tearingState.canTear &&
             pNode->pSurface->wlr()->current.committed & WLR_SURFACE_STATE_BUFFER) {
-            CRegion damageBox;
-            wlr_surface_get_effective_damage(pNode->pSurface->wlr(), damageBox.pixman());
+            CRegion damageBox{&pNode->pSurface->wlr()->buffer_damage};
 
             if (!damageBox.empty()) {
-
                 if (PMONITOR->tearingState.busy) {
                     PMONITOR->tearingState.frameScheduledWhileBusy = true;
                 } else {

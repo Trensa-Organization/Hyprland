@@ -135,15 +135,14 @@ class CCompositor {
     void           focusSurface(wlr_surface*, CWindow* pWindowOwner = nullptr);
     bool           windowExists(CWindow*);
     bool           windowValidMapped(CWindow*);
-    CWindow*       vectorToWindowIdeal(const Vector2D&, CWindow* pIgnoreWindow = nullptr); // used only for finding a window to focus on, basically a "findFocusableWindow"
-    CWindow*       vectorToWindowTiled(const Vector2D&);
+    bool           monitorExists(CMonitor*);
+    CWindow*       vectorToWindowUnified(const Vector2D&, uint8_t properties, CWindow* pIgnoreWindow = nullptr);
     wlr_surface*   vectorToLayerSurface(const Vector2D&, std::vector<std::unique_ptr<SLayerSurface>>*, Vector2D*, SLayerSurface**);
     SIMEPopup*     vectorToIMEPopup(const Vector2D& pos, std::list<SIMEPopup>& popups);
     wlr_surface*   vectorWindowToSurface(const Vector2D&, CWindow*, Vector2D& sl);
     Vector2D       vectorToSurfaceLocal(const Vector2D&, CWindow*, wlr_surface*);
-    CWindow*       windowFromCursor();
-    CWindow*       windowFloatingFromCursor();
     CMonitor*      getMonitorFromOutput(wlr_output*);
+    CMonitor*      getRealMonitorFromOutput(wlr_output*);
     CWindow*       getWindowForPopup(wlr_xdg_popup*);
     CWindow*       getWindowFromSurface(wlr_surface*);
     CWindow*       getWindowFromHandle(uint32_t);
@@ -172,11 +171,12 @@ class CCompositor {
     bool           isPointOnReservedArea(const Vector2D& point, const CMonitor* monitor = nullptr);
     CWindow*       getConstraintWindow(SMouse*);
     CMonitor*      getMonitorInDirection(const char&);
+    CMonitor*      getMonitorInDirection(CMonitor*, const char&);
     void           updateAllWindowsAnimatedDecorationValues();
     void           updateWorkspaceWindows(const int64_t& id);
     void           updateWindowAnimatedDecorationValues(CWindow*);
     int            getNextAvailableMonitorID(std::string const& name);
-    void           moveWorkspaceToMonitor(CWorkspace*, CMonitor*);
+    void           moveWorkspaceToMonitor(CWorkspace*, CMonitor*, bool noWarpCursor = false);
     void           swapActiveWorkspaces(CMonitor*, CMonitor*);
     CMonitor*      getMonitorFromString(const std::string&);
     bool           workspaceIDOutOfBounds(const int64_t&);
@@ -214,6 +214,7 @@ class CCompositor {
 
   private:
     void     initAllSignals();
+    void     removeAllSignals();
     void     setRandomSplash();
     void     initManagers(eManagersInitStage stage);
     void     prepareFallbackOutput();

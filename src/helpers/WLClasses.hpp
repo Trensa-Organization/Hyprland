@@ -127,15 +127,17 @@ struct SKeyboard {
     bool               active    = false;
     bool               enabled   = true;
 
-    xkb_layout_index_t activeLayout = 0;
+    xkb_layout_index_t activeLayout        = 0;
+    xkb_state*         xkbTranslationState = nullptr;
 
     std::string        name        = "";
     std::string        xkbFilePath = "";
 
     SStringRuleNames   currentRules;
-    int                repeatRate  = 0;
-    int                repeatDelay = 0;
-    int                numlockOn   = -1;
+    int                repeatRate        = 0;
+    int                repeatDelay       = 0;
+    int                numlockOn         = -1;
+    bool               resolveBindsBySym = false;
 
     // For the list lookup
     bool operator==(const SKeyboard& rhs) const {
@@ -258,6 +260,8 @@ struct STablet {
     bool                  relativeInput = false;
 
     std::string           name = "";
+
+    std::string           boundOutput = "";
 
     //
     bool operator==(const STablet& b) const {
@@ -408,5 +412,15 @@ struct STearingController {
 
     bool operator==(const STearingController& other) {
         return pWlrHint == other.pWlrHint;
+    }
+};
+
+struct SShortcutInhibitor {
+    wlr_keyboard_shortcuts_inhibitor_v1* pWlrInhibitor = nullptr;
+
+    DYNLISTENER(destroy);
+
+    bool operator==(const SShortcutInhibitor& other) {
+        return pWlrInhibitor == other.pWlrInhibitor;
     }
 };
