@@ -57,7 +57,7 @@ class CHyprRenderer {
     void                            ensureCursorRenderingMode();
     bool                            shouldRenderCursor();
     void                            setCursorHidden(bool hide);
-    void                            calculateUVForSurface(CWindow*, wlr_surface*, bool main = false);
+    void                            calculateUVForSurface(CWindow*, wlr_surface*, bool main = false, const Vector2D& projSize = {}, bool fixMisalignedFSV1 = false);
     std::tuple<float, float, float> getRenderTimes(CMonitor* pMonitor); // avg max min
     void                            renderLockscreen(CMonitor* pMonitor, timespec* now);
     void                            setOccludedForBackLayers(CRegion& region, CWorkspace* pWorkspace);
@@ -73,6 +73,8 @@ class CHyprRenderer {
     void                            makeEGLCurrent();
     void                            unsetEGL();
 
+    // if RENDER_MODE_NORMAL, provided damage will be written to.
+    // otherwise, it will be the one used.
     bool      beginRender(CMonitor* pMonitor, CRegion& damage, eRenderMode mode = RENDER_MODE_NORMAL, wlr_buffer* buffer = nullptr, CFramebuffer* fb = nullptr);
     void      endRender();
 
@@ -82,7 +84,6 @@ class CHyprRenderer {
     CMonitor* m_pMostHzMonitor         = nullptr;
     bool      m_bDirectScanoutBlocked  = false;
     bool      m_bSoftwareCursorsLocked = false;
-    bool      m_bTearingEnvSatisfied   = false;
 
     DAMAGETRACKINGMODES
     damageTrackingModeFromStr(const std::string&);
@@ -123,7 +124,6 @@ class CHyprRenderer {
     CRenderbuffer* m_pCurrentRenderbuffer = nullptr;
     wlr_buffer*    m_pCurrentWlrBuffer    = nullptr;
     eRenderMode    m_eRenderMode          = RENDER_MODE_NORMAL;
-    int            m_iLastBufferAge       = 0;
 
     bool           m_bNvidia = false;
 

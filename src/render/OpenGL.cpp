@@ -120,18 +120,18 @@ GLuint CHyprOpenGLImpl::compileShader(const GLuint& type, std::string src, bool 
 bool CHyprOpenGLImpl::passRequiresIntrospection(CMonitor* pMonitor) {
     // passes requiring introspection are the ones that need to render blur.
 
-    static auto* const PBLUR        = &g_pConfigManager->getConfigValuePtr("decoration:blur:enabled")->intValue;
-    static auto* const PXRAY        = &g_pConfigManager->getConfigValuePtr("decoration:blur:xray")->intValue;
-    static auto* const POPTIM       = &g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations")->intValue;
-    static auto* const PBLURSPECIAL = &g_pConfigManager->getConfigValuePtr("decoration:blur:special")->intValue;
+    static auto* const PBLUR        = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:enabled");
+    static auto* const PXRAY        = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:xray");
+    static auto* const POPTIM       = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations");
+    static auto* const PBLURSPECIAL = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:special");
 
-    if (m_RenderData.mouseZoomFactor != 1.0)
+    if (m_RenderData.mouseZoomFactor != 1.0 || g_pHyprRenderer->m_bCrashingInProgress)
         return true;
 
     if (!pMonitor->mirrors.empty())
         return true;
 
-    if (*PBLUR == 0)
+    if (**PBLUR == 0)
         return false;
 
     if (m_RenderData.pCurrentMonData->blurFBShouldRender)
@@ -141,14 +141,25 @@ bool CHyprOpenGLImpl::passRequiresIntrospection(CMonitor* pMonitor) {
         return false;
 
     for (auto& ls : pMonitor->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]) {
-        const auto XRAYMODE = ls->xray == -1 ? *PXRAY : ls->xray;
+        const auto XRAYMODE = ls->xray == -1 ? **PXRAY : ls->xray;
         if (ls->forceBlur && !XRAYMODE)
             return true;
     }
 
     for (auto& ls : pMonitor->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_TOP]) {
-        const auto XRAYMODE = ls->xray == -1 ? *PXRAY : ls->xray;
+        const auto XRAYMODE = ls->xray == -1 ? **PXRAY : ls->xray;
         if (ls->forceBlur && !XRAYMODE)
+            return true;
+    }
+
+    // these two block optimization
+    for (auto& ls : pMonitor->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND]) {
+        if (ls->forceBlur)
+            return true;
+    }
+
+    for (auto& ls : pMonitor->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM]) {
+        if (ls->forceBlur)
             return true;
     }
 
@@ -164,11 +175,11 @@ bool CHyprOpenGLImpl::passRequiresIntrospection(CMonitor* pMonitor) {
         }
     }
 
-    if (*PXRAY)
+    if (**PXRAY)
         return false;
 
     for (auto& w : g_pCompositor->m_vWindows) {
-        if (!w->m_bIsMapped || w->isHidden() || (!w->m_bIsFloating && *POPTIM && !g_pCompositor->isWorkspaceSpecial(w->m_iWorkspaceID)))
+        if (!w->m_bIsMapped || w->isHidden() || (!w->m_bIsFloating && **POPTIM && !g_pCompositor->isWorkspaceSpecial(w->m_iWorkspaceID)))
             continue;
 
         if (!g_pHyprRenderer->shouldRenderWindow(w.get()))
@@ -186,8 +197,27 @@ bool CHyprOpenGLImpl::passRequiresIntrospection(CMonitor* pMonitor) {
     return false;
 }
 
-void CHyprOpenGLImpl::begin(CMonitor* pMonitor, CRegion* pDamage, CFramebuffer* fb) {
+void CHyprOpenGLImpl::begin(CMonitor* pMonitor, const CRegion& damage_, CFramebuffer* fb, std::optional<CRegion> finalDamage) {
     m_RenderData.pMonitor = pMonitor;
+
+    static auto* const PFORCEINTROSPECTION = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("opengl:force_introspection");
+
+#ifndef GLES2
+
+    const GLenum RESETSTATUS = glGetGraphicsResetStatus();
+    if (RESETSTATUS != GL_NO_ERROR) {
+        std::string errStr = "";
+        switch (RESETSTATUS) {
+            case GL_GUILTY_CONTEXT_RESET: errStr = "GL_GUILTY_CONTEXT_RESET"; break;
+            case GL_INNOCENT_CONTEXT_RESET: errStr = "GL_INNOCENT_CONTEXT_RESET"; break;
+            case GL_UNKNOWN_CONTEXT_RESET: errStr = "GL_UNKNOWN_CONTEXT_RESET"; break;
+            default: errStr = "UNKNOWN??"; break;
+        }
+        RASSERT(false, "Aborting, glGetGraphicsResetStatus returned {}. Cannot continue until proper GPU reset handling is implemented.", errStr);
+        return;
+    }
+
+#endif
 
     TRACY_GPU_ZONE("RenderBegin");
 
@@ -195,10 +225,16 @@ void CHyprOpenGLImpl::begin(CMonitor* pMonitor, CRegion* pDamage, CFramebuffer* 
 
     matrixProjection(m_RenderData.projection, pMonitor->vecPixelSize.x, pMonitor->vecPixelSize.y, WL_OUTPUT_TRANSFORM_NORMAL);
 
+    if (m_mMonitorRenderResources.contains(pMonitor) && m_mMonitorRenderResources.at(pMonitor).offloadFB.m_vSize != pMonitor->vecPixelSize)
+        destroyMonitorResources(pMonitor);
+
     m_RenderData.pCurrentMonData = &m_mMonitorRenderResources[pMonitor];
 
+    if (!m_RenderData.pCurrentMonData->m_bShadersInitialized)
+        initShaders();
+
     // ensure a framebuffer for the monitor exists
-    if (!m_mMonitorRenderResources.contains(pMonitor) || m_RenderData.pCurrentMonData->offloadFB.m_vSize != pMonitor->vecPixelSize) {
+    if (m_RenderData.pCurrentMonData->offloadFB.m_vSize != pMonitor->vecPixelSize) {
         m_RenderData.pCurrentMonData->stencilTex.allocate();
 
         m_RenderData.pCurrentMonData->offloadFB.m_pStencilTex    = &m_RenderData.pCurrentMonData->stencilTex;
@@ -210,29 +246,28 @@ void CHyprOpenGLImpl::begin(CMonitor* pMonitor, CRegion* pDamage, CFramebuffer* 
         m_RenderData.pCurrentMonData->mirrorFB.alloc(pMonitor->vecPixelSize.x, pMonitor->vecPixelSize.y, pMonitor->drmFormat);
         m_RenderData.pCurrentMonData->mirrorSwapFB.alloc(pMonitor->vecPixelSize.x, pMonitor->vecPixelSize.y, pMonitor->drmFormat);
         m_RenderData.pCurrentMonData->offMainFB.alloc(pMonitor->vecPixelSize.x, pMonitor->vecPixelSize.y, pMonitor->drmFormat);
-
-        createBGTextureForMonitor(pMonitor);
     }
 
     if (m_RenderData.pCurrentMonData->monitorMirrorFB.isAllocated() && m_RenderData.pMonitor->mirrors.empty())
         m_RenderData.pCurrentMonData->monitorMirrorFB.release();
 
-    if (!m_RenderData.pCurrentMonData->m_bShadersInitialized)
-        initShaders();
-
-    m_RenderData.damage.set(*pDamage);
+    m_RenderData.damage.set(damage_);
+    m_RenderData.finalDamage.set(finalDamage.value_or(damage_));
 
     m_bFakeFrame = fb;
 
     if (m_bReloadScreenShader) {
-        m_bReloadScreenShader = false;
-        applyScreenShader(g_pConfigManager->getString("decoration:screen_shader"));
+        m_bReloadScreenShader      = false;
+        static auto* const PSHADER = (Hyprlang::STRING const*)g_pConfigManager->getConfigValuePtr("decoration:screen_shader");
+        applyScreenShader(*PSHADER);
     }
 
-    const auto PRBO         = g_pHyprRenderer->getCurrentRBO();
-    const bool FBPROPERSIZE = fb && fb->m_vSize == pMonitor->vecPixelSize;
+    const auto PRBO                    = g_pHyprRenderer->getCurrentRBO();
+    const bool FBPROPERSIZE            = !fb || fb->m_vSize == pMonitor->vecPixelSize;
+    const bool USERFORCEDINTROSPECTION = **PFORCEINTROSPECTION == 1 ? true : (**PFORCEINTROSPECTION == 2 ? g_pHyprRenderer->isNvidia() : false); // 0 - no, 1 - yes, 2 - nvidia only
 
-    if (!FBPROPERSIZE || m_sFinalScreenShader.program > 0 || (PRBO && pMonitor->vecPixelSize != PRBO->getFB()->m_vSize) || passRequiresIntrospection(pMonitor)) {
+    if (USERFORCEDINTROSPECTION || m_RenderData.forceIntrospection || !FBPROPERSIZE || m_sFinalScreenShader.program > 0 ||
+        (PRBO && pMonitor->vecPixelSize != PRBO->getFB()->m_vSize) || passRequiresIntrospection(pMonitor)) {
         // we have to offload
         // bind the offload Hypr Framebuffer
         m_RenderData.pCurrentMonData->offloadFB.bind();
@@ -255,7 +290,7 @@ void CHyprOpenGLImpl::begin(CMonitor* pMonitor, CRegion* pDamage, CFramebuffer* 
 }
 
 void CHyprOpenGLImpl::end() {
-    static auto* const PZOOMRIGID = &g_pConfigManager->getConfigValuePtr("misc:cursor_zoom_rigid")->intValue;
+    static auto* const PZOOMRIGID = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:cursor_zoom_rigid");
 
     TRACY_GPU_ZONE("RenderEnd");
 
@@ -264,7 +299,7 @@ void CHyprOpenGLImpl::end() {
 
     // end the render, copy the data to the WLR framebuffer
     if (m_bOffloadedFramebuffer) {
-        m_RenderData.damage = m_RenderData.pMonitor->lastFrameDamage;
+        m_RenderData.damage = m_RenderData.finalDamage;
 
         m_RenderData.outFB->bind();
 
@@ -275,7 +310,7 @@ void CHyprOpenGLImpl::end() {
                 (g_pInputManager->getMouseCoordsInternal() - m_RenderData.pMonitor->vecPosition) * m_RenderData.pMonitor->scale :
                 m_RenderData.pMonitor->vecTransformedSize / 2.f;
 
-            monbox.translate(-ZOOMCENTER).scale(m_RenderData.mouseZoomFactor).translate(*PZOOMRIGID ? m_RenderData.pMonitor->vecTransformedSize / 2.0 : ZOOMCENTER);
+            monbox.translate(-ZOOMCENTER).scale(m_RenderData.mouseZoomFactor).translate(**PZOOMRIGID ? m_RenderData.pMonitor->vecTransformedSize / 2.0 : ZOOMCENTER);
 
             if (monbox.x > 0)
                 monbox.x = 0;
@@ -294,7 +329,7 @@ void CHyprOpenGLImpl::end() {
 
         blend(false);
 
-        if (m_sFinalScreenShader.program < 1)
+        if (m_sFinalScreenShader.program < 1 && !g_pHyprRenderer->m_bCrashingInProgress)
             renderTexturePrimitive(m_RenderData.pCurrentMonData->offloadFB.m_cTex, &monbox);
         else
             renderTexture(m_RenderData.pCurrentMonData->offloadFB.m_cTex, &monbox, 1.f);
@@ -307,9 +342,24 @@ void CHyprOpenGLImpl::end() {
     }
 
     // reset our data
-    m_RenderData.pMonitor          = nullptr;
-    m_RenderData.mouseZoomFactor   = 1.f;
-    m_RenderData.mouseZoomUseMouse = true;
+    m_RenderData.pMonitor           = nullptr;
+    m_RenderData.mouseZoomFactor    = 1.f;
+    m_RenderData.mouseZoomUseMouse  = true;
+    m_RenderData.forceIntrospection = false;
+    m_RenderData.currentFB          = nullptr;
+    m_RenderData.mainFB             = nullptr;
+    m_RenderData.outFB              = nullptr;
+
+    // check for gl errors
+    const GLenum ERR = glGetError();
+
+    if (ERR == GL_CONTEXT_LOST) /* We don't have infra to recover from this */
+        RASSERT(false, "glGetError at Opengl::end() returned GL_CONTEXT_LOST. Cannot continue until proper GPU reset handling is implemented.");
+}
+
+void CHyprOpenGLImpl::setDamage(const CRegion& damage_, std::optional<CRegion> finalDamage) {
+    m_RenderData.damage.set(damage_);
+    m_RenderData.finalDamage.set(finalDamage.value_or(damage_));
 }
 
 void CHyprOpenGLImpl::initShaders() {
@@ -476,6 +526,8 @@ void CHyprOpenGLImpl::initShaders() {
 
 void CHyprOpenGLImpl::applyScreenShader(const std::string& path) {
 
+    static auto* const PDT = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("debug:damage_tracking");
+
     m_sFinalScreenShader.destroy();
 
     if (path == "" || path == STRVAL_EMPTY)
@@ -497,11 +549,11 @@ void CHyprOpenGLImpl::applyScreenShader(const std::string& path) {
         return;
     }
 
-    m_sFinalScreenShader.proj   = glGetUniformLocation(m_sFinalScreenShader.program, "proj");
-    m_sFinalScreenShader.tex    = glGetUniformLocation(m_sFinalScreenShader.program, "tex");
-    m_sFinalScreenShader.time   = glGetUniformLocation(m_sFinalScreenShader.program, "time");
-    m_sFinalScreenShader.output = glGetUniformLocation(m_sFinalScreenShader.program, "output");
-    if (m_sFinalScreenShader.time != -1 && g_pConfigManager->getInt("debug:damage_tracking") != 0 && !g_pHyprRenderer->m_bCrashingInProgress) {
+    m_sFinalScreenShader.proj      = glGetUniformLocation(m_sFinalScreenShader.program, "proj");
+    m_sFinalScreenShader.tex       = glGetUniformLocation(m_sFinalScreenShader.program, "tex");
+    m_sFinalScreenShader.time      = glGetUniformLocation(m_sFinalScreenShader.program, "time");
+    m_sFinalScreenShader.wl_output = glGetUniformLocation(m_sFinalScreenShader.program, "wl_output");
+    if (m_sFinalScreenShader.time != -1 && **PDT != 0 && !g_pHyprRenderer->m_bCrashingInProgress) {
         // The screen shader uses the "time" uniform
         // Since the screen shader could change every frame, damage tracking *needs* to be disabled
         g_pConfigManager->addParseError("Screen shader: Screen shader uses uniform 'time', which requires debug:damage_tracking to be switched off.\n"
@@ -637,12 +689,12 @@ void CHyprOpenGLImpl::renderRectWithDamage(CBox* box, const CColor& col, CRegion
     TRACY_GPU_ZONE("RenderRectWithDamage");
 
     CBox newBox = *box;
-    newBox.scale(m_RenderData.renderModif.scale).translate(m_RenderData.renderModif.translate);
+    m_RenderData.renderModif.applyToBox(newBox);
 
     box = &newBox;
 
     float matrix[9];
-    wlr_matrix_project_box(matrix, box->pWlr(), wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform), 0,
+    wlr_matrix_project_box(matrix, box->pWlr(), wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform), newBox.rot,
                            m_RenderData.pMonitor->projMatrix.data()); // TODO: write own, don't use WLR here
 
     float glMatrix[9];
@@ -719,18 +771,19 @@ void CHyprOpenGLImpl::renderTextureInternalWithDamage(const CTexture& tex, CBox*
 
     alpha = std::clamp(alpha, 0.f, 1.f);
 
-    if (m_RenderData.damage.empty())
+    if (damage->empty())
         return;
 
     CBox newBox = *pBox;
-    newBox.scale(m_RenderData.renderModif.scale).translate(m_RenderData.renderModif.translate);
+    m_RenderData.renderModif.applyToBox(newBox);
 
-    static auto* const PDIMINACTIVE = &g_pConfigManager->getConfigValuePtr("decoration:dim_inactive")->intValue;
+    static auto* const PDIMINACTIVE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:dim_inactive");
+    static auto* const PDT          = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("debug:damage_tracking");
 
     // get transform
     const auto TRANSFORM = wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform);
     float      matrix[9];
-    wlr_matrix_project_box(matrix, newBox.pWlr(), TRANSFORM, 0, m_RenderData.pMonitor->projMatrix.data());
+    wlr_matrix_project_box(matrix, newBox.pWlr(), TRANSFORM, newBox.rot, m_RenderData.pMonitor->projMatrix.data());
 
     float glMatrix[9];
     wlr_matrix_multiply(glMatrix, m_RenderData.projection, matrix);
@@ -785,15 +838,15 @@ void CHyprOpenGLImpl::renderTextureInternalWithDamage(const CTexture& tex, CBox*
 #endif
     glUniform1i(shader->tex, 0);
 
-    if ((usingFinalShader && g_pConfigManager->getInt("debug:damage_tracking") == 0) || CRASHING) {
+    if ((usingFinalShader && **PDT == 0) || CRASHING) {
         glUniform1f(shader->time, m_tGlobalTimer.getSeconds());
     } else if (usingFinalShader && shader->time != -1) {
         // Don't let time be unitialised
         glUniform1f(shader->time, 0.f);
     }
 
-    if (usingFinalShader && shader->output != -1)
-        glUniform1i(shader->output, m_RenderData.pMonitor->ID);
+    if (usingFinalShader && shader->wl_output != -1)
+        glUniform1i(shader->wl_output, m_RenderData.pMonitor->ID);
 
     if (CRASHING) {
         glUniform1f(shader->distort, g_pHyprRenderer->m_fCrashingDistort);
@@ -826,7 +879,7 @@ void CHyprOpenGLImpl::renderTextureInternalWithDamage(const CTexture& tex, CBox*
         glUniform2f(shader->fullSize, FULLSIZE.x, FULLSIZE.y);
         glUniform1f(shader->radius, round);
 
-        if (allowDim && m_pCurrentWindow && *PDIMINACTIVE) {
+        if (allowDim && m_pCurrentWindow && **PDIMINACTIVE) {
             glUniform1i(shader->applyTint, 1);
             const auto DIM = m_pCurrentWindow->m_fDimPercent.fl();
             glUniform3f(shader->tint, 1.f - DIM, 1.f - DIM, 1.f - DIM);
@@ -886,12 +939,12 @@ void CHyprOpenGLImpl::renderTexturePrimitive(const CTexture& tex, CBox* pBox) {
         return;
 
     CBox newBox = *pBox;
-    newBox.scale(m_RenderData.renderModif.scale).translate(m_RenderData.renderModif.translate);
+    m_RenderData.renderModif.applyToBox(newBox);
 
     // get transform
     const auto TRANSFORM = wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform);
     float      matrix[9];
-    wlr_matrix_project_box(matrix, newBox.pWlr(), TRANSFORM, 0, m_RenderData.pMonitor->projMatrix.data());
+    wlr_matrix_project_box(matrix, newBox.pWlr(), TRANSFORM, newBox.rot, m_RenderData.pMonitor->projMatrix.data());
 
     float glMatrix[9];
     wlr_matrix_multiply(glMatrix, m_RenderData.projection, matrix);
@@ -940,12 +993,12 @@ void CHyprOpenGLImpl::renderTextureMatte(const CTexture& tex, CBox* pBox, CFrame
         return;
 
     CBox newBox = *pBox;
-    newBox.scale(m_RenderData.renderModif.scale).translate(m_RenderData.renderModif.translate);
+    m_RenderData.renderModif.applyToBox(newBox);
 
     // get transform
     const auto TRANSFORM = wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform);
     float      matrix[9];
-    wlr_matrix_project_box(matrix, newBox.pWlr(), TRANSFORM, 0, m_RenderData.pMonitor->projMatrix.data());
+    wlr_matrix_project_box(matrix, newBox.pWlr(), TRANSFORM, newBox.rot, m_RenderData.pMonitor->projMatrix.data());
 
     float glMatrix[9];
     wlr_matrix_multiply(glMatrix, m_RenderData.projection, matrix);
@@ -1010,16 +1063,16 @@ CFramebuffer* CHyprOpenGLImpl::blurMainFramebufferWithDamage(float a, CRegion* o
     wlr_matrix_multiply(glMatrix, m_RenderData.projection, matrix);
 
     // get the config settings
-    static auto* const PBLURSIZE             = &g_pConfigManager->getConfigValuePtr("decoration:blur:size")->intValue;
-    static auto* const PBLURPASSES           = &g_pConfigManager->getConfigValuePtr("decoration:blur:passes")->intValue;
-    static auto* const PBLURVIBRANCY         = &g_pConfigManager->getConfigValuePtr("decoration:blur:vibrancy")->floatValue;
-    static auto* const PBLURVIBRANCYDARKNESS = &g_pConfigManager->getConfigValuePtr("decoration:blur:vibrancy_darkness")->floatValue;
+    static auto* const PBLURSIZE             = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:size");
+    static auto* const PBLURPASSES           = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:passes");
+    static auto* const PBLURVIBRANCY         = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:vibrancy");
+    static auto* const PBLURVIBRANCYDARKNESS = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:vibrancy_darkness");
 
     // prep damage
     CRegion damage{*originalDamage};
     wlr_region_transform(damage.pixman(), damage.pixman(), wlr_output_transform_invert(m_RenderData.pMonitor->transform), m_RenderData.pMonitor->vecTransformedSize.x,
                          m_RenderData.pMonitor->vecTransformedSize.y);
-    wlr_region_expand(damage.pixman(), damage.pixman(), *PBLURPASSES > 10 ? pow(2, 15) : std::clamp(*PBLURSIZE, (int64_t)1, (int64_t)40) * pow(2, *PBLURPASSES));
+    wlr_region_expand(damage.pixman(), damage.pixman(), **PBLURPASSES > 10 ? pow(2, 15) : std::clamp(**PBLURSIZE, (int64_t)1, (int64_t)40) * pow(2, **PBLURPASSES));
 
     // helper
     const auto    PMIRRORFB     = &m_RenderData.pCurrentMonData->mirrorFB;
@@ -1030,8 +1083,8 @@ CFramebuffer* CHyprOpenGLImpl::blurMainFramebufferWithDamage(float a, CRegion* o
     // Begin with base color adjustments - global brightness and contrast
     // TODO: make this a part of the first pass maybe to save on a drawcall?
     {
-        static auto* const PBLURCONTRAST   = &g_pConfigManager->getConfigValuePtr("decoration:blur:contrast")->floatValue;
-        static auto* const PBLURBRIGHTNESS = &g_pConfigManager->getConfigValuePtr("decoration:blur:brightness")->floatValue;
+        static auto* const PBLURCONTRAST   = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:contrast");
+        static auto* const PBLURBRIGHTNESS = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:brightness");
 
         PMIRRORSWAPFB->bind();
 
@@ -1049,8 +1102,8 @@ CFramebuffer* CHyprOpenGLImpl::blurMainFramebufferWithDamage(float a, CRegion* o
         wlr_matrix_transpose(glMatrix, glMatrix);
         glUniformMatrix3fv(m_RenderData.pCurrentMonData->m_shBLURPREPARE.proj, 1, GL_FALSE, glMatrix);
 #endif
-        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURPREPARE.contrast, *PBLURCONTRAST);
-        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURPREPARE.brightness, *PBLURBRIGHTNESS);
+        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURPREPARE.contrast, **PBLURCONTRAST);
+        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURPREPARE.brightness, **PBLURBRIGHTNESS);
         glUniform1i(m_RenderData.pCurrentMonData->m_shBLURPREPARE.tex, 0);
 
         glVertexAttribPointer(m_RenderData.pCurrentMonData->m_shBLURPREPARE.posAttrib, 2, GL_FLOAT, GL_FALSE, 0, fullVerts);
@@ -1094,13 +1147,13 @@ CFramebuffer* CHyprOpenGLImpl::blurMainFramebufferWithDamage(float a, CRegion* o
         wlr_matrix_transpose(glMatrix, glMatrix);
         glUniformMatrix3fv(pShader->proj, 1, GL_FALSE, glMatrix);
 #endif
-        glUniform1f(pShader->radius, *PBLURSIZE * a); // this makes the blursize change with a
+        glUniform1f(pShader->radius, **PBLURSIZE * a); // this makes the blursize change with a
         if (pShader == &m_RenderData.pCurrentMonData->m_shBLUR1) {
             glUniform2f(m_RenderData.pCurrentMonData->m_shBLUR1.halfpixel, 0.5f / (m_RenderData.pMonitor->vecPixelSize.x / 2.f),
                         0.5f / (m_RenderData.pMonitor->vecPixelSize.y / 2.f));
-            glUniform1i(m_RenderData.pCurrentMonData->m_shBLUR1.passes, *PBLURPASSES);
-            glUniform1f(m_RenderData.pCurrentMonData->m_shBLUR1.vibrancy, *PBLURVIBRANCY);
-            glUniform1f(m_RenderData.pCurrentMonData->m_shBLUR1.vibrancy_darkness, *PBLURVIBRANCYDARKNESS);
+            glUniform1i(m_RenderData.pCurrentMonData->m_shBLUR1.passes, **PBLURPASSES);
+            glUniform1f(m_RenderData.pCurrentMonData->m_shBLUR1.vibrancy, **PBLURVIBRANCY);
+            glUniform1f(m_RenderData.pCurrentMonData->m_shBLUR1.vibrancy_darkness, **PBLURVIBRANCYDARKNESS);
         } else
             glUniform2f(m_RenderData.pCurrentMonData->m_shBLUR2.halfpixel, 0.5f / (m_RenderData.pMonitor->vecPixelSize.x * 2.f),
                         0.5f / (m_RenderData.pMonitor->vecPixelSize.y * 2.f));
@@ -1137,20 +1190,20 @@ CFramebuffer* CHyprOpenGLImpl::blurMainFramebufferWithDamage(float a, CRegion* o
     CRegion tempDamage{damage};
 
     // and draw
-    for (int i = 1; i <= *PBLURPASSES; ++i) {
+    for (int i = 1; i <= **PBLURPASSES; ++i) {
         wlr_region_scale(tempDamage.pixman(), damage.pixman(), 1.f / (1 << i));
         drawPass(&m_RenderData.pCurrentMonData->m_shBLUR1, &tempDamage); // down
     }
 
-    for (int i = *PBLURPASSES - 1; i >= 0; --i) {
+    for (int i = **PBLURPASSES - 1; i >= 0; --i) {
         wlr_region_scale(tempDamage.pixman(), damage.pixman(), 1.f / (1 << i)); // when upsampling we make the region twice as big
         drawPass(&m_RenderData.pCurrentMonData->m_shBLUR2, &tempDamage);        // up
     }
 
     // finalize the image
     {
-        static auto* const PBLURNOISE      = &g_pConfigManager->getConfigValuePtr("decoration:blur:noise")->floatValue;
-        static auto* const PBLURBRIGHTNESS = &g_pConfigManager->getConfigValuePtr("decoration:blur:brightness")->floatValue;
+        static auto* const PBLURNOISE      = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:noise");
+        static auto* const PBLURBRIGHTNESS = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:brightness");
 
         if (currentRenderToFB == PMIRRORFB)
             PMIRRORSWAPFB->bind();
@@ -1171,8 +1224,8 @@ CFramebuffer* CHyprOpenGLImpl::blurMainFramebufferWithDamage(float a, CRegion* o
         wlr_matrix_transpose(glMatrix, glMatrix);
         glUniformMatrix3fv(m_RenderData.pCurrentMonData->m_shBLURFINISH.proj, 1, GL_FALSE, glMatrix);
 #endif
-        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURFINISH.noise, *PBLURNOISE);
-        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURFINISH.brightness, *PBLURBRIGHTNESS);
+        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURFINISH.noise, **PBLURNOISE);
+        glUniform1f(m_RenderData.pCurrentMonData->m_shBLURFINISH.brightness, **PBLURBRIGHTNESS);
 
         glUniform1i(m_RenderData.pCurrentMonData->m_shBLURFINISH.tex, 0);
 
@@ -1211,11 +1264,11 @@ void CHyprOpenGLImpl::markBlurDirtyForMonitor(CMonitor* pMonitor) {
 }
 
 void CHyprOpenGLImpl::preRender(CMonitor* pMonitor) {
-    static auto* const PBLURNEWOPTIMIZE = &g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations")->intValue;
-    static auto* const PBLURXRAY        = &g_pConfigManager->getConfigValuePtr("decoration:blur:xray")->intValue;
-    static auto* const PBLUR            = &g_pConfigManager->getConfigValuePtr("decoration:blur:enabled")->intValue;
+    static auto* const PBLURNEWOPTIMIZE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations");
+    static auto* const PBLURXRAY        = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:xray");
+    static auto* const PBLUR            = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:enabled");
 
-    if (!*PBLURNEWOPTIMIZE || !m_mMonitorRenderResources[pMonitor].blurFBDirty || !*PBLUR)
+    if (!**PBLURNEWOPTIMIZE || !m_mMonitorRenderResources[pMonitor].blurFBDirty || !**PBLUR)
         return;
 
     // ignore if solitary present, nothing to blur
@@ -1260,7 +1313,7 @@ void CHyprOpenGLImpl::preRender(CMonitor* pMonitor) {
 
     bool hasWindows = false;
     for (auto& w : g_pCompositor->m_vWindows) {
-        if (w->m_iWorkspaceID == pMonitor->activeWorkspace && !w->isHidden() && w->m_bIsMapped && (!w->m_bIsFloating || *PBLURXRAY)) {
+        if (w->m_iWorkspaceID == pMonitor->activeWorkspace && !w->isHidden() && w->m_bIsMapped && (!w->m_bIsFloating || **PBLURXRAY)) {
 
             // check if window is valid
             if (!windowShouldBeBlurred(w.get()))
@@ -1333,15 +1386,15 @@ void CHyprOpenGLImpl::preWindowPass() {
 }
 
 bool CHyprOpenGLImpl::preBlurQueued() {
-    static auto* const PBLURNEWOPTIMIZE = &g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations")->intValue;
-    static auto* const PBLUR            = &g_pConfigManager->getConfigValuePtr("decoration:blur:enabled")->intValue;
+    static auto* const PBLURNEWOPTIMIZE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations");
+    static auto* const PBLUR            = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:enabled");
 
-    return !(!m_RenderData.pCurrentMonData->blurFBDirty || !*PBLURNEWOPTIMIZE || !*PBLUR || !m_RenderData.pCurrentMonData->blurFBShouldRender);
+    return !(!m_RenderData.pCurrentMonData->blurFBDirty || !**PBLURNEWOPTIMIZE || !**PBLUR || !m_RenderData.pCurrentMonData->blurFBShouldRender);
 }
 
 bool CHyprOpenGLImpl::shouldUseNewBlurOptimizations(SLayerSurface* pLayer, CWindow* pWindow) {
-    static auto* const PBLURNEWOPTIMIZE = &g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations")->intValue;
-    static auto* const PBLURXRAY        = &g_pConfigManager->getConfigValuePtr("decoration:blur:xray")->intValue;
+    static auto* const PBLURNEWOPTIMIZE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:new_optimizations");
+    static auto* const PBLURXRAY        = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:xray");
 
     if (!m_RenderData.pCurrentMonData->blurFB.m_cTex.m_iTexID)
         return false;
@@ -1352,7 +1405,7 @@ bool CHyprOpenGLImpl::shouldUseNewBlurOptimizations(SLayerSurface* pLayer, CWind
     if (pLayer && pLayer->xray == 0)
         return false;
 
-    if ((*PBLURNEWOPTIMIZE && pWindow && !pWindow->m_bIsFloating && !g_pCompositor->isWorkspaceSpecial(pWindow->m_iWorkspaceID)) || *PBLURXRAY)
+    if ((**PBLURNEWOPTIMIZE && pWindow && !pWindow->m_bIsFloating && !g_pCompositor->isWorkspaceSpecial(pWindow->m_iWorkspaceID)) || **PBLURXRAY)
         return true;
 
     if ((pLayer && pLayer->xray == 1) || (pWindow && pWindow->m_sAdditionalConfigData.xray.toUnderlying() == 1))
@@ -1364,8 +1417,8 @@ bool CHyprOpenGLImpl::shouldUseNewBlurOptimizations(SLayerSurface* pLayer, CWind
 void CHyprOpenGLImpl::renderTextureWithBlur(const CTexture& tex, CBox* pBox, float a, wlr_surface* pSurface, int round, bool blockBlurOptimization, float blurA) {
     RASSERT(m_RenderData.pMonitor, "Tried to render texture with blur without begin()!");
 
-    static auto* const PBLURENABLED     = &g_pConfigManager->getConfigValuePtr("decoration:blur:enabled")->intValue;
-    static auto* const PNOBLUROVERSIZED = &g_pConfigManager->getConfigValuePtr("decoration:no_blur_on_oversized")->intValue;
+    static auto* const PBLURENABLED     = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:enabled");
+    static auto* const PNOBLUROVERSIZED = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:no_blur_on_oversized");
 
     TRACY_GPU_ZONE("RenderTextureWithBlur");
 
@@ -1376,7 +1429,7 @@ void CHyprOpenGLImpl::renderTextureWithBlur(const CTexture& tex, CBox* pBox, flo
     if (texDamage.empty())
         return;
 
-    if (*PBLURENABLED == 0 || (*PNOBLUROVERSIZED && m_RenderData.primarySurfaceUVTopLeft != Vector2D(-1, -1)) ||
+    if (**PBLURENABLED == 0 || (**PNOBLUROVERSIZED && m_RenderData.primarySurfaceUVTopLeft != Vector2D(-1, -1)) ||
         (m_pCurrentWindow && (m_pCurrentWindow->m_sAdditionalConfigData.forceNoBlur || m_pCurrentWindow->m_sAdditionalConfigData.forceRGBX))) {
         renderTexture(tex, pBox, a, round, false, true);
         return;
@@ -1437,11 +1490,11 @@ void CHyprOpenGLImpl::renderTextureWithBlur(const CTexture& tex, CBox* pBox, flo
     // stencil done. Render everything.
     CBox MONITORBOX = {0, 0, m_RenderData.pMonitor->vecTransformedSize.x, m_RenderData.pMonitor->vecTransformedSize.y};
     // render our great blurred FB
-    static auto* const PBLURIGNOREOPACITY = &g_pConfigManager->getConfigValuePtr("decoration:blur:ignore_opacity")->intValue;
+    static auto* const PBLURIGNOREOPACITY = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:ignore_opacity");
     m_bEndFrame                           = true; // fix transformed
     const auto SAVEDRENDERMODIF           = m_RenderData.renderModif;
     m_RenderData.renderModif              = {}; // fix shit
-    renderTextureInternalWithDamage(POUTFB->m_cTex, &MONITORBOX, *PBLURIGNOREOPACITY ? blurA : a * blurA, &texDamage, 0, false, false, false);
+    renderTextureInternalWithDamage(POUTFB->m_cTex, &MONITORBOX, **PBLURIGNOREOPACITY ? blurA : a * blurA, &texDamage, 0, false, false, false);
     m_bEndFrame              = false;
     m_RenderData.renderModif = SAVEDRENDERMODIF;
 
@@ -1475,14 +1528,14 @@ void CHyprOpenGLImpl::renderBorder(CBox* box, const CGradientValueData& grad, in
         return;
 
     CBox newBox = *box;
-    newBox.scale(m_RenderData.renderModif.scale).translate(m_RenderData.renderModif.translate);
+    m_RenderData.renderModif.applyToBox(newBox);
 
     box = &newBox;
 
     if (borderSize < 1)
         return;
 
-    int scaledBorderSize = std::round(borderSize * m_RenderData.pMonitor->scale * m_RenderData.renderModif.scale);
+    int scaledBorderSize = std::round(borderSize * m_RenderData.pMonitor->scale);
 
     // adjust box
     box->x -= scaledBorderSize;
@@ -1493,7 +1546,7 @@ void CHyprOpenGLImpl::renderBorder(CBox* box, const CGradientValueData& grad, in
     round += round == 0 ? 0 : scaledBorderSize;
 
     float matrix[9];
-    wlr_matrix_project_box(matrix, box->pWlr(), wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform), 0,
+    wlr_matrix_project_box(matrix, box->pWlr(), wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform), newBox.rot,
                            m_RenderData.pMonitor->projMatrix.data()); // TODO: write own, don't use WLR here
 
     float glMatrix[9];
@@ -1591,8 +1644,9 @@ void CHyprOpenGLImpl::makeRawWindowSnapshot(CWindow* pWindow, CFramebuffer* pFra
     // will try to copy the bg to apply blur.
     // this isn't entirely correct, but like, oh well.
     // small todo: maybe make this correct? :P
-    const auto BLURVAL = g_pConfigManager->getInt("decoration:blur:enabled");
-    g_pConfigManager->setInt("decoration:blur:enabled", 0);
+    static auto* const PBLUR   = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:enabled");
+    const auto         BLURVAL = **PBLUR;
+    **PBLUR                    = 0;
 
     // TODO: how can we make this the size of the window? setting it to window's size makes the entire screen render with the wrong res forever more. odd.
     glViewport(0, 0, PMONITOR->vecPixelSize.x, PMONITOR->vecPixelSize.y);
@@ -1603,7 +1657,7 @@ void CHyprOpenGLImpl::makeRawWindowSnapshot(CWindow* pWindow, CFramebuffer* pFra
 
     g_pHyprRenderer->renderWindow(pWindow, PMONITOR, &now, false, RENDER_PASS_ALL, true);
 
-    g_pConfigManager->setInt("decoration:blur:enabled", BLURVAL);
+    **PBLUR = BLURVAL;
 
     g_pHyprRenderer->endRender();
 }
@@ -1643,14 +1697,15 @@ void CHyprOpenGLImpl::makeWindowSnapshot(CWindow* pWindow) {
     // will try to copy the bg to apply blur.
     // this isn't entirely correct, but like, oh well.
     // small todo: maybe make this correct? :P
-    const auto BLURVAL = g_pConfigManager->getInt("decoration:blur:enabled");
-    g_pConfigManager->setInt("decoration:blur:enabled", 0);
+    static auto* const PBLUR   = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:blur:enabled");
+    const auto         BLURVAL = **PBLUR;
+    **PBLUR                    = 0;
 
     clear(CColor(0, 0, 0, 0)); // JIC
 
     g_pHyprRenderer->renderWindow(pWindow, PMONITOR, &now, !pWindow->m_bX11DoesntWantBorders, RENDER_PASS_ALL);
 
-    g_pConfigManager->setInt("decoration:blur:enabled", BLURVAL);
+    **PBLUR = BLURVAL;
 
     g_pHyprRenderer->endRender();
 
@@ -1701,7 +1756,7 @@ void CHyprOpenGLImpl::renderSnapshot(CWindow** pWindow) {
     RASSERT(m_RenderData.pMonitor, "Tried to render snapshot rect without begin()!");
     const auto         PWINDOW = *pWindow;
 
-    static auto* const PDIMAROUND = &g_pConfigManager->getConfigValuePtr("decoration:dim_around")->floatValue;
+    static auto* const PDIMAROUND = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("decoration:dim_around");
 
     auto               it = m_mWindowFramebuffers.begin();
     for (; it != m_mWindowFramebuffers.end(); it++) {
@@ -1728,9 +1783,9 @@ void CHyprOpenGLImpl::renderSnapshot(CWindow** pWindow) {
 
     CRegion fakeDamage{0, 0, PMONITOR->vecTransformedSize.x, PMONITOR->vecTransformedSize.y};
 
-    if (*PDIMAROUND && (*pWindow)->m_sAdditionalConfigData.dimAround) {
+    if (**PDIMAROUND && (*pWindow)->m_sAdditionalConfigData.dimAround) {
         CBox monbox = {0, 0, g_pHyprOpenGL->m_RenderData.pMonitor->vecPixelSize.x, g_pHyprOpenGL->m_RenderData.pMonitor->vecPixelSize.y};
-        g_pHyprOpenGL->renderRect(&monbox, CColor(0, 0, 0, *PDIMAROUND * PWINDOW->m_fAlpha.fl()));
+        g_pHyprOpenGL->renderRect(&monbox, CColor(0, 0, 0, **PDIMAROUND * PWINDOW->m_fAlpha.fl()));
         g_pHyprRenderer->damageMonitor(PMONITOR);
     }
 
@@ -1779,18 +1834,18 @@ void CHyprOpenGLImpl::renderRoundedShadow(CBox* box, int round, int range, const
     TRACY_GPU_ZONE("RenderShadow");
 
     CBox newBox = *box;
-    newBox.scale(m_RenderData.renderModif.scale).translate(m_RenderData.renderModif.translate);
+    m_RenderData.renderModif.applyToBox(newBox);
 
     box = &newBox;
 
-    static auto* const PSHADOWPOWER = &g_pConfigManager->getConfigValuePtr("decoration:shadow_render_power")->intValue;
+    static auto* const PSHADOWPOWER = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:shadow_render_power");
 
-    const auto         SHADOWPOWER = std::clamp((int)*PSHADOWPOWER, 1, 4);
+    const auto         SHADOWPOWER = std::clamp((int)**PSHADOWPOWER, 1, 4);
 
     const auto         col = color;
 
     float              matrix[9];
-    wlr_matrix_project_box(matrix, box->pWlr(), wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform), 0,
+    wlr_matrix_project_box(matrix, box->pWlr(), wlr_output_transform_invert(!m_bEndFrame ? WL_OUTPUT_TRANSFORM_NORMAL : m_RenderData.pMonitor->transform), newBox.rot,
                            m_RenderData.pMonitor->projMatrix.data()); // TODO: write own, don't use WLR here
 
     float glMatrix[9];
@@ -1876,18 +1931,24 @@ void CHyprOpenGLImpl::renderMirrored() {
     renderTexture(PFB->m_cTex, &monbox, 1.f, 0, false, false);
 }
 
-void CHyprOpenGLImpl::renderSplash(cairo_t* const CAIRO, cairo_surface_t* const CAIROSURFACE, double offsetY) {
-    cairo_select_font_face(CAIRO, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+void CHyprOpenGLImpl::renderSplash(cairo_t* const CAIRO, cairo_surface_t* const CAIROSURFACE, double offsetY, const Vector2D& size) {
+    static auto* const PSPLASHCOLOR = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:col.splash");
 
-    const auto FONTSIZE = (int)(m_RenderData.pMonitor->vecPixelSize.y / 76);
+    static auto* const PSPLASHFONT = (Hyprlang::STRING const*)g_pConfigManager->getConfigValuePtr("misc:splash_font_family");
+
+    cairo_select_font_face(CAIRO, *PSPLASHFONT, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+
+    const auto FONTSIZE = (int)(size.y / 76);
     cairo_set_font_size(CAIRO, FONTSIZE);
 
-    cairo_set_source_rgba(CAIRO, 1.0, 1.0, 1.0, 0.32);
+    const auto COLOR = CColor(**PSPLASHCOLOR);
+
+    cairo_set_source_rgba(CAIRO, COLOR.r, COLOR.g, COLOR.b, COLOR.a);
 
     cairo_text_extents_t textExtents;
     cairo_text_extents(CAIRO, g_pCompositor->m_szCurrentSplash.c_str(), &textExtents);
 
-    cairo_move_to(CAIRO, (m_RenderData.pMonitor->vecPixelSize.x - textExtents.width) / 2.0, m_RenderData.pMonitor->vecPixelSize.y - textExtents.height + offsetY);
+    cairo_move_to(CAIRO, (size.x - textExtents.width) / 2.0, size.y - textExtents.height + offsetY);
 
     cairo_show_text(CAIRO, g_pCompositor->m_szCurrentSplash.c_str());
 
@@ -1897,110 +1958,124 @@ void CHyprOpenGLImpl::renderSplash(cairo_t* const CAIRO, cairo_surface_t* const 
 void CHyprOpenGLImpl::createBGTextureForMonitor(CMonitor* pMonitor) {
     RASSERT(m_RenderData.pMonitor, "Tried to createBGTex without begin()!");
 
-    static auto* const PRENDERTEX      = &g_pConfigManager->getConfigValuePtr("misc:disable_hyprland_logo")->intValue;
-    static auto* const PNOSPLASH       = &g_pConfigManager->getConfigValuePtr("misc:disable_splash_rendering")->intValue;
-    static auto* const PFORCEHYPRCHAN  = &g_pConfigManager->getConfigValuePtr("misc:force_hypr_chan")->intValue;
-    static auto* const PFORCEWALLPAPER = &g_pConfigManager->getConfigValuePtr("misc:force_default_wallpaper")->intValue;
+    static auto* const PRENDERTEX      = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:disable_hyprland_logo");
+    static auto* const PNOSPLASH       = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:disable_splash_rendering");
+    static auto* const PFORCEWALLPAPER = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("misc:force_default_wallpaper");
 
-    const auto         FORCEWALLPAPER = std::clamp(*PFORCEWALLPAPER, static_cast<int64_t>(-1L), static_cast<int64_t>(2L));
+    const auto         FORCEWALLPAPER = std::clamp(**PFORCEWALLPAPER, static_cast<int64_t>(-1L), static_cast<int64_t>(2L));
 
-    if (*PRENDERTEX)
+    static std::string texPath = "";
+
+    if (**PRENDERTEX)
         return;
 
     // release the last tex if exists
-    const auto PTEX = &m_mMonitorBGTextures[pMonitor];
-    PTEX->destroyTexture();
+    const auto PFB = &m_mMonitorBGFBs[pMonitor];
+    PFB->release();
 
-    PTEX->allocate();
+    PFB->alloc(pMonitor->vecPixelSize.x, pMonitor->vecPixelSize.y, pMonitor->drmFormat);
     Debug::log(LOG, "Allocated texture for BGTex");
 
     // TODO: use relative paths to the installation
     // or configure the paths at build time
-    std::string texPath    = "/usr/share/hyprland/wall_";
-    std::string prefixes[] = {"", "anime_", "anime2_"};
+    if (texPath.empty()) {
+        texPath = "/usr/share/hyprland/wall";
 
-    // get the adequate tex
-    if (FORCEWALLPAPER == -1) {
-        std::random_device              dev;
-        std::mt19937                    engine(dev());
-        std::uniform_int_distribution<> distribution(0, 2);
-        std::uniform_int_distribution<> distribution_anime(1, 2);
+        // get the adequate tex
+        if (FORCEWALLPAPER == -1) {
+            std::mt19937_64                 engine(time(nullptr));
+            std::uniform_int_distribution<> distribution(0, 2);
 
-        if (PFORCEHYPRCHAN)
-            texPath += prefixes[distribution_anime(engine)];
-        else
-            texPath += prefixes[distribution(engine)];
-    } else
-        texPath += prefixes[FORCEWALLPAPER];
+            texPath += std::to_string(distribution(engine));
+        } else
+            texPath += std::to_string(std::clamp(**PFORCEWALLPAPER, (int64_t)0, (int64_t)2));
 
-    Vector2D textureSize;
-    if (pMonitor->vecTransformedSize.x > 3850) {
-        textureSize = Vector2D(7680, 4320);
-        texPath += "8K.png";
-    } else if (pMonitor->vecTransformedSize.x > 1930) {
-        textureSize = Vector2D(3840, 2160);
-        texPath += "4K.png";
-    } else {
-        textureSize = Vector2D(1920, 1080);
-        texPath += "2K.png";
+        texPath += ".png";
+
+        // check if wallpapers exist
+        if (!std::filesystem::exists(texPath)) {
+            // try local
+            texPath = texPath.substr(0, 5) + "local/" + texPath.substr(5);
+
+            if (!std::filesystem::exists(texPath))
+                return; // the texture will be empty, oh well. We'll clear with a solid color anyways.
+        }
     }
 
-    // check if wallpapers exist
-    if (!std::filesystem::exists(texPath)) {
-        // try local
-        texPath = texPath.substr(0, 5) + "local/" + texPath.substr(5);
+    // create a new one with cairo
+    CTexture   tex;
 
-        if (!std::filesystem::exists(texPath))
-            return; // the texture will be empty, oh well. We'll clear with a solid color anyways.
-    }
+    const auto CAIROISURFACE = cairo_image_surface_create_from_png(texPath.c_str());
+    const auto CAIROFORMAT   = cairo_image_surface_get_format(CAIROISURFACE);
 
-    PTEX->m_vSize = textureSize;
+    tex.allocate();
+    const Vector2D IMAGESIZE = {cairo_image_surface_get_width(CAIROISURFACE), cairo_image_surface_get_height(CAIROISURFACE)};
 
     // calc the target box
     const double MONRATIO = m_RenderData.pMonitor->vecTransformedSize.x / m_RenderData.pMonitor->vecTransformedSize.y;
-    const double WPRATIO  = 1.77;
+    const double WPRATIO  = IMAGESIZE.x / IMAGESIZE.y;
 
     Vector2D     origin;
     double       scale;
 
     if (MONRATIO > WPRATIO) {
-        scale = m_RenderData.pMonitor->vecTransformedSize.x / PTEX->m_vSize.x;
+        scale = m_RenderData.pMonitor->vecTransformedSize.x / IMAGESIZE.x;
 
-        origin.y = (m_RenderData.pMonitor->vecTransformedSize.y - PTEX->m_vSize.y * scale) / 2.0;
+        origin.y = (m_RenderData.pMonitor->vecTransformedSize.y - IMAGESIZE.y * scale) / 2.0;
     } else {
-        scale = m_RenderData.pMonitor->vecTransformedSize.y / PTEX->m_vSize.y;
+        scale = m_RenderData.pMonitor->vecTransformedSize.y / IMAGESIZE.y;
 
-        origin.x = (m_RenderData.pMonitor->vecTransformedSize.x - PTEX->m_vSize.x * scale) / 2.0;
+        origin.x = (m_RenderData.pMonitor->vecTransformedSize.x - IMAGESIZE.x * scale) / 2.0;
     }
 
-    CBox box = {origin.x, origin.y, PTEX->m_vSize.x * scale, PTEX->m_vSize.y * scale};
+    const Vector2D scaledSize = IMAGESIZE * scale;
 
-    m_mMonitorRenderResources[pMonitor].backgroundTexBox = box;
+    const auto     CAIROSURFACE = cairo_image_surface_create(CAIROFORMAT, scaledSize.x, scaledSize.y);
+    const auto     CAIRO        = cairo_create(CAIROSURFACE);
 
-    // create a new one with cairo
-    const auto CAIROSURFACE = cairo_image_surface_create_from_png(texPath.c_str());
-    const auto CAIRO        = cairo_create(CAIROSURFACE);
+    cairo_set_antialias(CAIRO, CAIRO_ANTIALIAS_GOOD);
+    cairo_scale(CAIRO, scale, scale);
+    cairo_rectangle(CAIRO, 0, 0, 100, 100);
+    cairo_set_source_surface(CAIRO, CAIROISURFACE, 0, 0);
+    cairo_paint(CAIRO);
 
-    // scale it to fit the current monitor
-    cairo_scale(CAIRO, textureSize.x / pMonitor->vecTransformedSize.x, textureSize.y / pMonitor->vecTransformedSize.y);
+    if (!**PNOSPLASH)
+        renderSplash(CAIRO, CAIROSURFACE, origin.y * WPRATIO / MONRATIO * scale, IMAGESIZE);
 
-    // render splash on wallpaper
-    if (!*PNOSPLASH)
-        renderSplash(CAIRO, CAIROSURFACE, origin.y * WPRATIO / MONRATIO);
+    cairo_surface_flush(CAIROSURFACE);
+
+    CBox box    = {origin.x, origin.y, IMAGESIZE.x * scale, IMAGESIZE.y * scale};
+    tex.m_vSize = IMAGESIZE * scale;
 
     // copy the data to an OpenGL texture we have
-    const auto DATA = cairo_image_surface_get_data(CAIROSURFACE);
-    glBindTexture(GL_TEXTURE_2D, PTEX->m_iTexID);
+    const GLint glIFormat = CAIROFORMAT == CAIRO_FORMAT_RGB96F ? GL_RGB32F : GL_RGBA;
+    const GLint glFormat  = CAIROFORMAT == CAIRO_FORMAT_RGB96F ? GL_RGB : GL_RGBA;
+    const GLint glType    = CAIROFORMAT == CAIRO_FORMAT_RGB96F ? GL_FLOAT : GL_UNSIGNED_BYTE;
+
+    const auto  DATA = cairo_image_surface_get_data(CAIROSURFACE);
+    glBindTexture(GL_TEXTURE_2D, tex.m_iTexID);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 #ifndef GLES2
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+    if (CAIROFORMAT != CAIRO_FORMAT_RGB96F) {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+    }
 #endif
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, DATA);
+    glTexImage2D(GL_TEXTURE_2D, 0, glIFormat, tex.m_vSize.x, tex.m_vSize.y, 0, glFormat, glType, DATA);
 
     cairo_surface_destroy(CAIROSURFACE);
+    cairo_surface_destroy(CAIROISURFACE);
     cairo_destroy(CAIRO);
+
+    // render the texture to our fb
+    PFB->bind();
+    CRegion fakeDamage{0, 0, INT16_MAX, INT16_MAX};
+    renderTextureInternalWithDamage(tex, &box, 1.0, &fakeDamage);
+
+    // bind back
+    if (m_RenderData.currentFB)
+        m_RenderData.currentFB->bind();
 
     Debug::log(LOG, "Background created for monitor {}", pMonitor->szName);
 }
@@ -2010,15 +2085,19 @@ void CHyprOpenGLImpl::clearWithTex() {
 
     TRACY_GPU_ZONE("RenderClearWithTex");
 
-    auto TEXIT = m_mMonitorBGTextures.find(m_RenderData.pMonitor);
+    auto TEXIT = m_mMonitorBGFBs.find(m_RenderData.pMonitor);
 
-    if (TEXIT == m_mMonitorBGTextures.end()) {
+    if (TEXIT == m_mMonitorBGFBs.end()) {
         createBGTextureForMonitor(m_RenderData.pMonitor);
-        TEXIT = m_mMonitorBGTextures.find(m_RenderData.pMonitor);
+        TEXIT = m_mMonitorBGFBs.find(m_RenderData.pMonitor);
     }
 
-    if (TEXIT != m_mMonitorBGTextures.end())
-        renderTexturePrimitive(TEXIT->second, &m_mMonitorRenderResources[m_RenderData.pMonitor].backgroundTexBox);
+    if (TEXIT != m_mMonitorBGFBs.end()) {
+        CBox monbox = {0, 0, m_RenderData.pMonitor->vecTransformedSize.x, m_RenderData.pMonitor->vecTransformedSize.y};
+        m_bEndFrame = true;
+        renderTexture(TEXIT->second.m_cTex, &monbox, 1);
+        m_bEndFrame = false;
+    }
 }
 
 void CHyprOpenGLImpl::destroyMonitorResources(CMonitor* pMonitor) {
@@ -2036,10 +2115,10 @@ void CHyprOpenGLImpl::destroyMonitorResources(CMonitor* pMonitor) {
         g_pHyprOpenGL->m_mMonitorRenderResources.erase(RESIT);
     }
 
-    auto TEXIT = g_pHyprOpenGL->m_mMonitorBGTextures.find(pMonitor);
-    if (TEXIT != g_pHyprOpenGL->m_mMonitorBGTextures.end()) {
-        TEXIT->second.destroyTexture();
-        g_pHyprOpenGL->m_mMonitorBGTextures.erase(TEXIT);
+    auto TEXIT = g_pHyprOpenGL->m_mMonitorBGFBs.find(pMonitor);
+    if (TEXIT != g_pHyprOpenGL->m_mMonitorBGFBs.end()) {
+        TEXIT->second.release();
+        g_pHyprOpenGL->m_mMonitorBGFBs.erase(TEXIT);
     }
 
     Debug::log(LOG, "Monitor {} -> destroyed all render data", pMonitor->szName);
@@ -2211,3 +2290,26 @@ const SGLPixelFormat* CHyprOpenGLImpl::getPixelFormatFromDRM(uint32_t drmFormat)
 
     return nullptr;
 }
+
+void SRenderModifData::applyToBox(CBox& box) {
+    for (auto& [type, val] : modifs) {
+        try {
+            switch (type) {
+                case RMOD_TYPE_SCALE: box.scale(std::any_cast<float>(val)); break;
+                case RMOD_TYPE_SCALECENTER: box.scaleFromCenter(std::any_cast<float>(val)); break;
+                case RMOD_TYPE_TRANSLATE: box.translate(std::any_cast<Vector2D>(val)); break;
+                case RMOD_TYPE_ROTATE: box.rot += std::any_cast<float>(val); break;
+                case RMOD_TYPE_ROTATECENTER: {
+                    const auto   THETA = std::any_cast<float>(val);
+                    const double COS   = std::cos(THETA);
+                    const double SIN   = std::sin(THETA);
+                    box.rot += THETA;
+                    const auto OLDPOS = box.pos();
+                    box.x             = OLDPOS.x * COS - OLDPOS.y * SIN;
+                    box.y             = OLDPOS.y * COS + OLDPOS.x * SIN;
+                }
+            }
+        } catch (std::bad_any_cast& e) { Debug::log(ERR, "BUG THIS OR PLUGIN ERROR: caught a bad_any_cast in SRenderModifData::applyToBox!"); }
+    }
+}
+

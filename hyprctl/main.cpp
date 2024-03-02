@@ -86,7 +86,7 @@ std::vector<SInstanceData> instances() {
     std::vector<SInstanceData> result;
 
     for (const auto& el : std::filesystem::directory_iterator("/tmp/hypr")) {
-        if (el.is_directory())
+        if (el.is_directory() || !el.path().string().ends_with(".lock"))
             continue;
 
         // read lock
@@ -94,7 +94,9 @@ std::vector<SInstanceData> instances() {
         data->id            = el.path().string();
         data->id            = data->id.substr(data->id.find_last_of('/') + 1, data->id.find(".lock") - data->id.find_last_of('/') - 1);
 
-        data->time = std::stoull(data->id.substr(data->id.find_first_of('_') + 1));
+        try {
+            data->time = std::stoull(data->id.substr(data->id.find_first_of('_') + 1));
+        } catch (std::exception& e) { continue; }
 
         // read file
         std::ifstream ifs(el.path().string());
@@ -102,7 +104,9 @@ std::vector<SInstanceData> instances() {
         int           i = 0;
         for (std::string line; std::getline(ifs, line); ++i) {
             if (i == 0) {
-                data->pid = std::stoull(line);
+                try {
+                    data->pid = std::stoull(line);
+                } catch (std::exception& e) { continue; }
             } else if (i == 1) {
                 data->wlSocket = line;
             } else
@@ -309,6 +313,8 @@ int main(int argc, char** argv) {
             if (ARGS[i] == "-j" && !fullArgs.contains("j")) {
                 fullArgs += "j";
                 json = true;
+            } else if (ARGS[i] == "-r" && !fullArgs.contains("r")) {
+                fullArgs += "r";
             } else if (ARGS[i] == "--batch") {
                 fullRequest = "--batch ";
             } else if (ARGS[i] == "--instance" || ARGS[i] == "-i") {
@@ -368,7 +374,7 @@ int main(int argc, char** argv) {
         const auto ISIG = getenv("HYPRLAND_INSTANCE_SIGNATURE");
 
         if (!ISIG) {
-            std::cout << "HYPRLAND_INSTANCE_SIGNATURE not set! (is hyprland running?)";
+            std::cout << "HYPRLAND_INSTANCE_SIGNATURE not set! (is hyprland running?)\n";
             return 1;
         }
 
@@ -442,8 +448,7 @@ int main(int argc, char** argv) {
     else if (fullRequest.contains("/--help"))
         printf("%s", USAGE.c_str());
     else {
-        printf("%s\n", USAGE.c_str());
-        return 1;
+        request(fullRequest);
     }
 
     printf("\n");

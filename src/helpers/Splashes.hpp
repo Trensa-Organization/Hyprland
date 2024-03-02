@@ -19,6 +19,21 @@ inline const std::vector<std::string> SPLASHES = {
     "Compile, wait for 20 minutes, notice a new commit, compile again.",
     "To rice, or not to rice, that is the question.",
     "Now available on Fedora!",
+    "\"Hyprland is so good it starts with a capital letter\" - Hazel",
+    "\"please make this message a splash\" - eriedaberrie",
+    "\"the only wayland compositor powered by fried chicken\" - raf",
+    "\"This will never get into Hyprland\" - Flafy",
+    "\"Hyprland only gives you up on -git\" - fazzi",
+    "Segmentation fault (core dumped)",
+    "\"disabling hyprland logo is a war crime\" - vaxry",
+    "some basic startup code",
+    "\"I think I am addicted to hyprland\" - mathisbuilder",
+    "\"hyprland is the most important package in the arch repos\" - jacekpoz",
+    "Thanks Brodie!",
+    "Thanks fufexan!",
+    "Thanks raf!",
+    "You can't use --splash to change this message :)",
+    "Hyprland will overtake Gnome in popularity by [insert year]",
     // music reference / quote section
     "J'remue le ciel, le jour, la nuit.",
     "aezakmi, aezakmi, aezakmi, aezakmi, aezakmi, aezakmi, aezakmi!",
@@ -26,23 +41,6 @@ inline const std::vector<std::string> SPLASHES = {
     "I see a red door and I want it painted black.",
     "Take on me, take me on...",
     "You spin me right round baby right round",
-    "Through the fire and the flames, we carry on!",
-    "Life could be a dream, sweetheart",
-    "We're off to never-never land",
-    "Just remember ALL CAPS when you spell the man name",
-    "The cake is a lie The cake is a lie The cake is a lie The cake is a lie",
-    "WE'RE SHAMELESS",
-    "Now I only want you gone",
-    "You Forget A Thousand Things Every Day Pal. Make Sure This Is One Of 'Em."
-    "The right man in the wrong place can make all the difference in the world."
-    "Truth Is, The Game Was Rigged From The Start."
-    "It's said war, war never changes. Men do, through the roads they walk."
-    "Victory shall be ours, it shall be swift, and it will be honest; purchased with blood."
-    "Patrolling the Mojave almost makes you wish for a nuclear winter."
-    "When life gives you lemons, don’t make lemonade…"
-    "You Picked The Wrong House, Fool!"
-    "I suck at life, but I bowl like an angel."
-    "Swaying to the symphony... of destruction!",
     "Stayin' alive, stayin' alive",
     "Say no way, say no way ya, no way!",
     "Ground control to Major Tom...",

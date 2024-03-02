@@ -30,6 +30,24 @@ enum eGroupRules {
     GROUP_OVERRIDE    = 1 << 6, // Override other rules
 };
 
+enum eGetWindowProperties {
+    WINDOW_ONLY      = 0,
+    RESERVED_EXTENTS = 1 << 0,
+    INPUT_EXTENTS    = 1 << 1,
+    FULL_EXTENTS     = 1 << 2,
+    FLOATING_ONLY    = 1 << 3,
+    ALLOW_FLOATING   = 1 << 4,
+    USE_PROP_TILED   = 1 << 5,
+};
+
+enum eSuppressEvents {
+    SUPPRESS_NONE               = 0,
+    SUPPRESS_FULLSCREEN         = 1 << 0,
+    SUPPRESS_MAXIMIZE           = 1 << 1,
+    SUPPRESS_ACTIVATE           = 1 << 2,
+    SUPPRESS_ACTIVATE_FOCUSONLY = 1 << 3,
+};
+
 class IWindowTransformer;
 
 template <typename T>
@@ -133,6 +151,7 @@ struct SWindowAdditionalConfigData {
     CWindowOverridableVar<bool> forceNoBorder         = false;
     CWindowOverridableVar<bool> forceNoShadow         = false;
     CWindowOverridableVar<bool> forceNoDim            = false;
+    CWindowOverridableVar<bool> noFocus               = false;
     CWindowOverridableVar<bool> windowDanceCompat     = false;
     CWindowOverridableVar<bool> noMaxSize             = false;
     CWindowOverridableVar<bool> dimAround             = false;
@@ -221,16 +240,17 @@ class CWindow {
     bool        m_bIsPseudotiled = false;
     Vector2D    m_vPseudoSize    = Vector2D(0, 0);
 
-    bool        m_bFirstMap      = false; // for layouts
-    bool        m_bIsFloating    = false;
-    bool        m_bDraggingTiled = false; // for dragging around tiled windows
-    bool        m_bIsFullscreen  = false;
-    bool        m_bWasMaximized  = false;
-    uint64_t    m_iMonitorID     = -1;
-    std::string m_szTitle        = "";
-    std::string m_szInitialTitle = "";
-    std::string m_szInitialClass = "";
-    int         m_iWorkspaceID   = -1;
+    bool        m_bFirstMap           = false; // for layouts
+    bool        m_bIsFloating         = false;
+    bool        m_bDraggingTiled      = false; // for dragging around tiled windows
+    bool        m_bIsFullscreen       = false;
+    bool        m_bDontSendFullscreen = false;
+    bool        m_bWasMaximized       = false;
+    uint64_t    m_iMonitorID          = -1;
+    std::string m_szTitle             = "";
+    std::string m_szInitialTitle      = "";
+    std::string m_szInitialClass      = "";
+    int         m_iWorkspaceID        = -1;
 
     bool        m_bIsMapped = false;
 
@@ -250,13 +270,13 @@ class CWindow {
     //
 
     // For nofocus
-    bool m_bNoFocus        = false;
     bool m_bNoInitialFocus = false;
 
     // Fullscreen and Maximize
-    bool              m_bWantsInitialFullscreen = false;
-    bool              m_bNoFullscreenRequest    = false;
-    bool              m_bNoMaximizeRequest      = false;
+    bool m_bWantsInitialFullscreen = false;
+
+    // bitfield eSuppressEvents
+    uint64_t          m_eSuppressedEvents = SUPPRESS_NONE;
 
     SSurfaceTreeNode* m_pSurfaceTree = nullptr;
 
@@ -342,7 +362,7 @@ class CWindow {
     // methods
     CBox                     getFullWindowBoundingBox();
     SWindowDecorationExtents getFullWindowExtents();
-    CBox                     getWindowInputBox();
+    CBox                     getWindowBoxUnified(uint64_t props);
     CBox                     getWindowMainSurfaceBox();
     CBox                     getWindowIdealBoundingBoxIgnoreReserved();
     void                     addWindowDeco(std::unique_ptr<IHyprWindowDecoration> deco);
@@ -356,7 +376,7 @@ class CWindow {
     void                     createToplevelHandle();
     void                     destroyToplevelHandle();
     void                     updateToplevel();
-    void                     updateSurfaceOutputs();
+    void                     updateSurfaceScaleTransformDetails();
     void                     moveToWorkspace(int);
     CWindow*                 X11TransientFor();
     void                     onUnmap();

@@ -79,9 +79,11 @@ class CHyprDwindleLayout : public IHyprLayout {
     void                    applyNodeDataToWindow(SDwindleNodeData*, bool force = false);
     SDwindleNodeData*       getNodeFromWindow(CWindow*);
     SDwindleNodeData*       getFirstNodeOnWorkspace(const int&);
+    SDwindleNodeData*       getClosestNodeOnWorkspace(const int&, const Vector2D&);
     SDwindleNodeData*       getMasterNodeOnWorkspace(const int&);
 
     void                    toggleSplit(CWindow*);
+    void                    swapSplit(CWindow*);
 
     eDirection              overrideDirection = DIRECTION_DEFAULT;
 
