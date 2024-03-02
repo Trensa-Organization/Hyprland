@@ -23,49 +23,42 @@
 #include <filesystem>
 #include <stdarg.h>
 
-const std::string USAGE = R"#(usage:  hyprctl [flags] [<command> [args]]
-        hyprctl --batch {<command 1> [args] ; <command 2> [args] ; ...}
-LISTING COMMANDS:
-    monitors:           List outputs
-    workspaces:         List all workspaces
-    activeworkspace:    Get currently active workspace
-    clients:            List clients (e.g. windows)
-    activewindow:       Get currently active window
-    layers:             List layers
-    animations:         List animations and bezier curves in use
-    devices:            List devices
-    binds:              List registered binds
-    instances:          List running Hyprland instances
-    layouts:            List layouts
-    globalshortcuts:    List global shortcuts
-    version:            Print hyprland version
-CONFIGURATION COMMANDS:
-    keyword <keyword> [args]:   Execute a keyword
-    getoption <option>:         Get value of <option>
-    reload:                     Reload configurations
-PLUGIN:
-    plugin list:            List loaded plugins
-    plugin load <path>:     Load plugin from <path>
-    plugin unload <path>:   Unload plugin at <path>
-THEMING:
-    hyprpaper <keywords>        Issue hyprpaper keywords using IPC
-    splash:                     Prints the current random splash
-    cursorpos:                  Get the current cursor position in global layout coordinates
-    setcursor <theme> <size>:   Set cursor theme and size, (except for GTK)
-ADDITIONAL COMMANDS:
-    dispatch <name> [args]:     Run a dispatcher
-    kill:                       Enter kill mode, where you can kill an app by clicking on it,
-                                use ESCAPE to quit kill mode
-    switchxkblayout <args>:     Sets the xkb layout index for a keyboard, see wiki for details
-    setprop <window> <prop>:    Set window property, see wiki for details
-    seterror <color> <msg>:     Display <msg> as a error message, will reset upon reloading config
-    seterror disable:           Clear error message
-    notify <icon> <time_ms> <color> <message>:
-                                Sends a notification using the built-in Hyprland notification system.
-    output <args>:              Add and remove fake outputs to specified backend, see wiki for details.
-FLAGS:
+const std::string USAGE = R"#(usage: hyprctl [(opt)flags] [command] [(opt)args]
+
+commands:
+    activewindow
+    activeworkspace
+    binds
+    clients
+    cursorpos
+    decorations
+    devices
+    dispatch
+    getoption
+    globalshortcuts
+    hyprpaper
+    instances
+    keyword
+    kill
+    layers
+    layouts
+    monitors
+    notify
+    plugin
+    reload
+    setcursor
+    seterror
+    setprop
+    splash
+    switchxkblayout
+    systeminfo
+    version
+    workspacerules
+    workspaces
+
+flags:
     -j -> output in JSON
-    --help -> display this help
+    -r -> refresh state after issuing command (e.g. for updating variables)
     --batch -> execute a batch of commands, separated by ';'
     --instance (-i) -> use a specific instance. Can be either signature or index in hyprctl instances (0, 1, etc)
 )#";
@@ -86,7 +79,7 @@ std::vector<SInstanceData> instances() {
     std::vector<SInstanceData> result;
 
     for (const auto& el : std::filesystem::directory_iterator("/tmp/hypr")) {
-        if (el.is_directory())
+        if (el.is_directory() || !el.path().string().ends_with(".lock"))
             continue;
 
         // read lock
@@ -94,7 +87,9 @@ std::vector<SInstanceData> instances() {
         data->id            = el.path().string();
         data->id            = data->id.substr(data->id.find_last_of('/') + 1, data->id.find(".lock") - data->id.find_last_of('/') - 1);
 
-        data->time = std::stoull(data->id.substr(data->id.find_first_of('_') + 1));
+        try {
+            data->time = std::stoull(data->id.substr(data->id.find_first_of('_') + 1));
+        } catch (std::exception& e) { continue; }
 
         // read file
         std::ifstream ifs(el.path().string());
@@ -102,7 +97,9 @@ std::vector<SInstanceData> instances() {
         int           i = 0;
         for (std::string line; std::getline(ifs, line); ++i) {
             if (i == 0) {
-                data->pid = std::stoull(line);
+                try {
+                    data->pid = std::stoull(line);
+                } catch (std::exception& e) { continue; }
             } else if (i == 1) {
                 data->wlSocket = line;
             } else
@@ -309,6 +306,8 @@ int main(int argc, char** argv) {
             if (ARGS[i] == "-j" && !fullArgs.contains("j")) {
                 fullArgs += "j";
                 json = true;
+            } else if (ARGS[i] == "-r" && !fullArgs.contains("r")) {
+                fullArgs += "r";
             } else if (ARGS[i] == "--batch") {
                 fullRequest = "--batch ";
             } else if (ARGS[i] == "--instance" || ARGS[i] == "-i") {
@@ -368,7 +367,7 @@ int main(int argc, char** argv) {
         const auto ISIG = getenv("HYPRLAND_INSTANCE_SIGNATURE");
 
         if (!ISIG) {
-            std::cout << "HYPRLAND_INSTANCE_SIGNATURE not set! (is hyprland running?)";
+            std::cout << "HYPRLAND_INSTANCE_SIGNATURE not set! (is hyprland running?)\n";
             return 1;
         }
 
@@ -379,42 +378,8 @@ int main(int argc, char** argv) {
 
     if (fullRequest.contains("/--batch"))
         batchRequest(fullRequest);
-    else if (fullRequest.contains("/monitors"))
-        request(fullRequest);
-    else if (fullRequest.contains("/clients"))
-        request(fullRequest);
-    else if (fullRequest.contains("/workspaces"))
-        request(fullRequest);
-    else if (fullRequest.contains("/activeworkspace"))
-        request(fullRequest);
-    else if (fullRequest.contains("/workspacerules"))
-        request(fullRequest);
-    else if (fullRequest.contains("/activewindow"))
-        request(fullRequest);
-    else if (fullRequest.contains("/layers"))
-        request(fullRequest);
-    else if (fullRequest.contains("/version"))
-        request(fullRequest);
-    else if (fullRequest.contains("/kill"))
-        request(fullRequest);
-    else if (fullRequest.contains("/splash"))
-        request(fullRequest);
-    else if (fullRequest.contains("/devices"))
-        request(fullRequest);
-    else if (fullRequest.contains("/reload"))
-        request(fullRequest);
-    else if (fullRequest.contains("/getoption"))
-        request(fullRequest);
-    else if (fullRequest.contains("/binds"))
-        request(fullRequest);
-    else if (fullRequest.contains("/cursorpos"))
-        request(fullRequest);
-    else if (fullRequest.contains("/animations"))
-        request(fullRequest);
-    else if (fullRequest.contains("/globalshortcuts"))
-        request(fullRequest);
-    else if (fullRequest.contains("/rollinglog"))
-        request(fullRequest);
+    else if (fullRequest.contains("/hyprpaper"))
+        requestHyprpaper(fullRequest);
     else if (fullRequest.contains("/switchxkblayout"))
         request(fullRequest, 2);
     else if (fullRequest.contains("/seterror"))
@@ -435,15 +400,10 @@ int main(int argc, char** argv) {
         request(fullRequest, 2);
     else if (fullRequest.contains("/decorations"))
         request(fullRequest, 1);
-    else if (fullRequest.contains("/hyprpaper"))
-        requestHyprpaper(fullRequest);
-    else if (fullRequest.contains("/layouts"))
-        request(fullRequest);
     else if (fullRequest.contains("/--help"))
         printf("%s", USAGE.c_str());
     else {
-        printf("%s\n", USAGE.c_str());
-        return 1;
+        request(fullRequest);
     }
 
     printf("\n");

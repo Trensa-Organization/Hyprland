@@ -3,12 +3,14 @@
 #include <cmath>
 #include <format>
 #include "../macros.hpp"
+#include <hyprlang.hpp>
 
 class Vector2D {
   public:
     Vector2D(double, double);
     Vector2D();
     ~Vector2D();
+    Vector2D(const Hyprlang::VEC2&);
 
     double x = 0;
     double y = 0;
@@ -88,12 +90,12 @@ class Vector2D {
 
     double   distance(const Vector2D& other) const;
     double   size() const;
-    Vector2D clamp(const Vector2D& min, const Vector2D& max = Vector2D()) const;
+    Vector2D clamp(const Vector2D& min, const Vector2D& max = Vector2D{-1, -1}) const;
 
     Vector2D floor() const;
     Vector2D round() const;
 
-    bool     inTriangle(const Vector2D& p1, const Vector2D& p2, const Vector2D& p3) const;
+    Vector2D getComponentMax(const Vector2D& other) const;
 };
 
 /**

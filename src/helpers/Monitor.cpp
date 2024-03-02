@@ -1,5 +1,7 @@
 #include "Monitor.hpp"
 
+#include "MiscFunctions.hpp"
+
 #include "../Compositor.hpp"
 
 int ratHandler(void* data) {
@@ -8,7 +10,7 @@ int ratHandler(void* data) {
     return 1;
 }
 
-CMonitor::CMonitor() {
+CMonitor::CMonitor() : state(this) {
     wlr_damage_ring_init(&damage);
 }
 
@@ -43,8 +45,8 @@ void CMonitor::onConnect(bool noRule) {
     tearingState.canTear = wlr_backend_is_drm(output->backend); // tearing only works on drm
 
     if (m_bEnabled) {
-        wlr_output_enable(output, 1);
-        wlr_output_commit(output);
+        wlr_output_state_set_enabled(state.wlr(), true);
+        state.commit();
         return;
     }
 
@@ -54,17 +56,21 @@ void CMonitor::onConnect(bool noRule) {
     // remove comma character from description. This allow monitor specific rules to work on monitor with comma on their description
     szDescription.erase(std::remove(szDescription.begin(), szDescription.end(), ','), szDescription.end());
 
+    // field is backwards-compatible with intended usage of `szDescription` but excludes the parenthesized DRM node name suffix
+    szShortDescription =
+        removeBeginEndSpacesTabs(std::format("{} {} {}", output->make ? output->make : "", output->model ? output->model : "", output->serial ? output->serial : ""));
+
     if (!wlr_backend_is_drm(output->backend))
         createdByUser = true; // should be true. WL, X11 and Headless backends should be addable / removable
 
     // get monitor rule that matches
-    SMonitorRule monitorRule = g_pConfigManager->getMonitorRuleFor(output->name, output->description ? output->description : "");
+    SMonitorRule monitorRule = g_pConfigManager->getMonitorRuleFor(*this);
 
     // if it's disabled, disable and ignore
     if (monitorRule.disabled) {
 
-        wlr_output_set_scale(output, 1);
-        wlr_output_set_transform(output, WL_OUTPUT_TRANSFORM_NORMAL);
+        wlr_output_state_set_scale(state.wlr(), 1);
+        wlr_output_state_set_transform(state.wlr(), WL_OUTPUT_TRANSFORM_NORMAL);
 
         auto PREFSTATE = wlr_output_preferred_mode(output);
 
@@ -72,9 +78,9 @@ void CMonitor::onConnect(bool noRule) {
             wlr_output_mode* mode;
 
             wl_list_for_each(mode, &output->modes, link) {
-                wlr_output_set_mode(output, PREFSTATE);
+                wlr_output_state_set_mode(state.wlr(), mode);
 
-                if (!wlr_output_test(output))
+                if (!wlr_output_test_state(output, state.wlr()))
                     continue;
 
                 PREFSTATE = mode;
@@ -83,13 +89,13 @@ void CMonitor::onConnect(bool noRule) {
         }
 
         if (PREFSTATE)
-            wlr_output_set_mode(output, PREFSTATE);
+            wlr_output_state_set_mode(state.wlr(), PREFSTATE);
         else
             Debug::log(WARN, "No mode found for disabled output {}", output->name);
 
-        wlr_output_enable(output, 0);
+        wlr_output_state_set_enabled(state.wlr(), 0);
 
-        if (!wlr_output_commit(output))
+        if (!state.commit())
             Debug::log(ERR, "Couldn't commit disabled state on output {}", output->name);
 
         m_bEnabled = false;
@@ -130,13 +136,28 @@ void CMonitor::onConnect(bool noRule) {
 
     m_bEnabled = true;
 
-    wlr_output_enable(output, 1);
+    wlr_output_state_set_enabled(state.wlr(), 1);
 
     // set mode, also applies
     if (!noRule)
         g_pHyprRenderer->applyMonitorRule(this, &monitorRule, true);
 
-    wlr_output_commit(output);
+    for (const auto& PTOUCHDEV : g_pInputManager->m_lTouchDevices) {
+        if (matchesStaticSelector(PTOUCHDEV.boundOutput)) {
+            Debug::log(LOG, "Binding touch device {} to output {}", PTOUCHDEV.name, szName);
+            wlr_cursor_map_input_to_output(g_pCompositor->m_sWLRCursor, PTOUCHDEV.pWlrDevice, output);
+        }
+    }
+
+    for (const auto& PTABLET : g_pInputManager->m_lTablets) {
+        if (matchesStaticSelector(PTABLET.boundOutput)) {
+            Debug::log(LOG, "Binding tablet {} to output {}", PTABLET.name, szName);
+            wlr_cursor_map_input_to_output(g_pCompositor->m_sWLRCursor, PTABLET.wlrDevice, output);
+        }
+    }
+
+    if (!state.commit())
+        Debug::log(WARN, "wlr_output_commit_state failed in CMonitor::onCommit");
 
     wlr_damage_ring_set_bounds(&damage, vecTransformedSize.x, vecTransformedSize.y);
 
@@ -162,6 +183,7 @@ void CMonitor::onConnect(bool noRule) {
     //
 
     g_pEventManager->postEvent(SHyprIPCEvent{"monitoradded", szName});
+    g_pEventManager->postEvent(SHyprIPCEvent{"monitoraddedv2", std::format("{},{},{}", ID, szName, szShortDescription)});
     EMIT_HOOK_EVENT("monitorAdded", this);
 
     if (!g_pCompositor->m_pLastMonitor) // set the last monitor if it isnt set yet
@@ -283,9 +305,10 @@ void CMonitor::onDisconnect(bool destroy) {
     if (!destroy)
         wlr_output_layout_remove(g_pCompositor->m_sWLROutputLayout, output);
 
-    wlr_output_enable(output, false);
+    wlr_output_state_set_enabled(state.wlr(), false);
 
-    wlr_output_commit(output);
+    if (!state.commit())
+        Debug::log(WARN, "wlr_output_commit_state failed in CMonitor::onDisconnect");
 
     if (g_pCompositor->m_pLastMonitor == this)
         g_pCompositor->setActiveMonitor(BACKUPMON);
@@ -307,13 +330,11 @@ void CMonitor::onDisconnect(bool destroy) {
 }
 
 void CMonitor::addDamage(const pixman_region32_t* rg) {
-    static auto* const PZOOMFACTOR = &g_pConfigManager->getConfigValuePtr("misc:cursor_zoom_factor")->floatValue;
-    if (*PZOOMFACTOR != 1.f && g_pCompositor->getMonitorFromCursor() == this) {
+    static auto* const PZOOMFACTOR = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("misc:cursor_zoom_factor");
+    if (**PZOOMFACTOR != 1.f && g_pCompositor->getMonitorFromCursor() == this) {
         wlr_damage_ring_add_whole(&damage);
         g_pCompositor->scheduleFrameForMonitor(this);
-    }
-
-    if (wlr_damage_ring_add(&damage, rg))
+    } else if (wlr_damage_ring_add(&damage, rg))
         g_pCompositor->scheduleFrameForMonitor(this);
 }
 
@@ -322,8 +343,8 @@ void CMonitor::addDamage(const CRegion* rg) {
 }
 
 void CMonitor::addDamage(const CBox* box) {
-    static auto* const PZOOMFACTOR = &g_pConfigManager->getConfigValuePtr("misc:cursor_zoom_factor")->floatValue;
-    if (*PZOOMFACTOR != 1.f && g_pCompositor->getMonitorFromCursor() == this) {
+    static auto* const PZOOMFACTOR = (Hyprlang::FLOAT* const*)g_pConfigManager->getConfigValuePtr("misc:cursor_zoom_factor");
+    if (**PZOOMFACTOR != 1.f && g_pCompositor->getMonitorFromCursor() == this) {
         wlr_damage_ring_add_whole(&damage);
         g_pCompositor->scheduleFrameForMonitor(this);
     }
@@ -334,6 +355,19 @@ void CMonitor::addDamage(const CBox* box) {
 
 bool CMonitor::isMirror() {
     return pMirrorOf != nullptr;
+}
+
+bool CMonitor::matchesStaticSelector(const std::string& selector) const {
+    if (selector.starts_with("desc:")) {
+        // match by description
+        const auto DESCRIPTIONSELECTOR = selector.substr(5);
+        const auto DESCRIPTION         = removeBeginEndSpacesTabs(szDescription.substr(0, szDescription.find_first_of('(')));
+
+        return DESCRIPTIONSELECTOR == szDescription || DESCRIPTIONSELECTOR == DESCRIPTION;
+    } else {
+        // match by selector
+        return szName == selector;
+    }
 }
 
 int CMonitor::findAvailableDefaultWS() {
@@ -415,7 +449,7 @@ void CMonitor::setMirror(const std::string& mirrorOf) {
         pMirrorOf = nullptr;
 
         // set rule
-        const auto RULE = g_pConfigManager->getMonitorRuleFor(this->szName, this->output->description ? this->output->description : "");
+        const auto RULE = g_pConfigManager->getMonitorRuleFor(*this);
 
         vecPosition = RULE.offset;
 
@@ -502,7 +536,7 @@ float CMonitor::getDefaultScale() {
     return 1;
 }
 
-void CMonitor::changeWorkspace(CWorkspace* const pWorkspace, bool internal, bool noMouseMove) {
+void CMonitor::changeWorkspace(CWorkspace* const pWorkspace, bool internal, bool noMouseMove, bool noFocus) {
     if (!pWorkspace)
         return;
 
@@ -533,13 +567,13 @@ void CMonitor::changeWorkspace(CWorkspace* const pWorkspace, bool internal, bool
             }
         }
 
-        if (!g_pCompositor->m_pLastMonitor->specialWorkspaceID) {
-            static auto* const PFOLLOWMOUSE = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
+        if (!noFocus && !g_pCompositor->m_pLastMonitor->specialWorkspaceID) {
+            static auto* const PFOLLOWMOUSE = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("input:follow_mouse");
             CWindow*           pWindow      = pWorkspace->getLastFocusedWindow();
 
             if (!pWindow) {
-                if (*PFOLLOWMOUSE == 1)
-                    pWindow = g_pCompositor->vectorToWindowIdeal(g_pInputManager->getMouseCoordsInternal());
+                if (**PFOLLOWMOUSE == 1)
+                    pWindow = g_pCompositor->vectorToWindowUnified(g_pInputManager->getMouseCoordsInternal(), RESERVED_EXTENTS | INPUT_EXTENTS | ALLOW_FLOATING);
 
                 if (!pWindow)
                     pWindow = g_pCompositor->getTopLeftWindowOnWorkspace(pWorkspace->m_iID);
@@ -569,8 +603,8 @@ void CMonitor::changeWorkspace(CWorkspace* const pWorkspace, bool internal, bool
     g_pCompositor->updateSuspendedStates();
 }
 
-void CMonitor::changeWorkspace(const int& id, bool internal) {
-    changeWorkspace(g_pCompositor->getWorkspaceByID(id), internal);
+void CMonitor::changeWorkspace(const int& id, bool internal, bool noMouseMove, bool noFocus) {
+    changeWorkspace(g_pCompositor->getWorkspaceByID(id), internal, noMouseMove, noFocus);
 }
 
 void CMonitor::setSpecialWorkspace(CWorkspace* const pWorkspace) {
@@ -621,17 +655,17 @@ void CMonitor::setSpecialWorkspace(CWorkspace* const pWorkspace) {
     for (auto& w : g_pCompositor->m_vWindows) {
         if (w->m_iWorkspaceID == pWorkspace->m_iID) {
             w->m_iMonitorID = ID;
-            w->updateSurfaceOutputs();
+            w->updateSurfaceScaleTransformDetails();
 
             const auto MIDDLE = w->middle();
             if (w->m_bIsFloating && !VECINRECT(MIDDLE, vecPosition.x, vecPosition.y, vecPosition.x + vecSize.x, vecPosition.y + vecSize.y) && w->m_iX11Type != 2) {
                 // if it's floating and the middle isnt on the current mon, move it to the center
                 const auto PMONFROMMIDDLE = g_pCompositor->getMonitorFromVector(MIDDLE);
-                Vector2D   pos            = w->m_vRealPosition.goalv();
+                Vector2D   pos            = w->m_vRealPosition.goal();
                 if (!VECINRECT(MIDDLE, PMONFROMMIDDLE->vecPosition.x, PMONFROMMIDDLE->vecPosition.y, PMONFROMMIDDLE->vecPosition.x + PMONFROMMIDDLE->vecSize.x,
                                PMONFROMMIDDLE->vecPosition.y + PMONFROMMIDDLE->vecSize.y)) {
                     // not on any monitor, center
-                    pos = middle() / 2.f - w->m_vRealSize.goalv() / 2.f;
+                    pos = middle() / 2.f - w->m_vRealSize.goal() / 2.f;
                 } else
                     pos = pos - PMONFROMMIDDLE->vecPosition + vecPosition;
 
@@ -677,4 +711,33 @@ void CMonitor::updateMatrix() {
         wlr_matrix_transform(projMatrix.data(), transform);
         wlr_matrix_translate(projMatrix.data(), -vecTransformedSize.x / 2.0, -vecTransformedSize.y / 2.0);
     }
+}
+
+CMonitorState::CMonitorState(CMonitor* owner) {
+    m_pOwner = owner;
+    wlr_output_state_init(&m_state);
+}
+
+CMonitorState::~CMonitorState() {
+    wlr_output_state_finish(&m_state);
+}
+
+wlr_output_state* CMonitorState::wlr() {
+    return &m_state;
+}
+
+void CMonitorState::clear() {
+    wlr_output_state_finish(&m_state);
+    m_state = {0};
+    wlr_output_state_init(&m_state);
+}
+
+bool CMonitorState::commit() {
+    bool ret = wlr_output_commit_state(m_pOwner->output, &m_state);
+    clear();
+    return ret;
+}
+
+bool CMonitorState::test() {
+    return wlr_output_test_state(m_pOwner->output, &m_state);
 }

@@ -95,6 +95,9 @@ static SScreencopyFrame* frameFromResource(wl_resource* resource) {
 }
 
 void CScreencopyProtocolManager::removeClient(CScreencopyClient* client, bool force) {
+    if (!client)
+        return;
+
     if (!force) {
         if (!client || client->ref <= 0)
             return;
@@ -104,6 +107,12 @@ void CScreencopyProtocolManager::removeClient(CScreencopyClient* client, bool fo
     }
 
     m_lClients.remove(*client); // TODO: this doesn't get cleaned up after sharing app exits???
+
+    for (auto& f : m_lFrames) {
+        // avoid dangling ptrs
+        if (f.client == client)
+            f.client = nullptr;
+    }
 }
 
 static void handleManagerResourceDestroy(wl_resource* resource) {
@@ -211,6 +220,18 @@ void CScreencopyProtocolManager::captureOutput(wl_client* client, wl_resource* r
     PCLIENT->ref++;
 
     g_pHyprRenderer->makeEGLCurrent();
+
+    if (g_pHyprOpenGL->m_mMonitorRenderResources.contains(PFRAME->pMonitor)) {
+        const auto& RDATA = g_pHyprOpenGL->m_mMonitorRenderResources.at(PFRAME->pMonitor);
+        // bind the fb for its format. Suppress gl errors.
+#ifndef GLES2
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, RDATA.offloadFB.m_iFb);
+#else
+        glBindFramebuffer(GL_FRAMEBUFFER, RDATA.offloadFB.m_iFb);
+#endif
+    } else
+        Debug::log(ERR, "No RDATA in screencopy???");
+
     PFRAME->shmFormat = g_pHyprOpenGL->getPreferredReadFormat(PFRAME->pMonitor);
     if (PFRAME->shmFormat == DRM_FORMAT_INVALID) {
         Debug::log(ERR, "No format supported by renderer in capture output");
@@ -260,6 +281,13 @@ void CScreencopyProtocolManager::copyFrame(wl_client* client, wl_resource* resou
 
     if (!PFRAME) {
         Debug::log(ERR, "No frame in copyFrame??");
+        return;
+    }
+
+    if (!g_pCompositor->monitorExists(PFRAME->pMonitor)) {
+        Debug::log(ERR, "client requested sharing of a monitor that is gone");
+        zwlr_screencopy_frame_v1_send_failed(PFRAME->resource);
+        removeFrame(PFRAME);
         return;
     }
 
@@ -328,7 +356,7 @@ void CScreencopyProtocolManager::copyFrame(wl_client* client, wl_resource* resou
         g_pHyprRenderer->m_bSoftwareCursorsLocked = true;
 
     if (!PFRAME->withDamage)
-        g_pCompositor->scheduleFrameForMonitor(PFRAME->pMonitor);
+        g_pHyprRenderer->damageMonitor(PFRAME->pMonitor);
 }
 
 void CScreencopyProtocolManager::onOutputCommit(CMonitor* pMonitor, wlr_output_event_commit* e) {
@@ -412,16 +440,21 @@ void CScreencopyProtocolManager::sendFrameDamage(SScreencopyFrame* frame) {
     if (!frame->withDamage)
         return;
 
-    for (auto& RECT : frame->pMonitor->lastFrameDamage.getRects()) {
+    // TODO:
+    // add a damage ring for this.
 
-        if (frame->buffer->width < 1 || frame->buffer->height < 1 || frame->buffer->width - RECT.x1 < 1 || frame->buffer->height - RECT.y1 < 1) {
-            Debug::log(ERR, "[sc] Failed to send damage");
-            break;
-        }
+    // for (auto& RECT : frame->pMonitor->lastFrameDamage.getRects()) {
 
-        zwlr_screencopy_frame_v1_send_damage(frame->resource, std::clamp(RECT.x1, 0, frame->buffer->width), std::clamp(RECT.y1, 0, frame->buffer->height),
-                                             std::clamp(RECT.x2 - RECT.x1, 0, frame->buffer->width - RECT.x1), std::clamp(RECT.y2 - RECT.y1, 0, frame->buffer->height - RECT.y1));
-    }
+    //     if (frame->buffer->width < 1 || frame->buffer->height < 1 || frame->buffer->width - RECT.x1 < 1 || frame->buffer->height - RECT.y1 < 1) {
+    //         Debug::log(ERR, "[sc] Failed to send damage");
+    //         break;
+    //     }
+
+    //     zwlr_screencopy_frame_v1_send_damage(frame->resource, std::clamp(RECT.x1, 0, frame->buffer->width), std::clamp(RECT.y1, 0, frame->buffer->height),
+    //                                          std::clamp(RECT.x2 - RECT.x1, 0, frame->buffer->width - RECT.x1), std::clamp(RECT.y2 - RECT.y1, 0, frame->buffer->height - RECT.y1));
+    // }
+
+    zwlr_screencopy_frame_v1_send_damage(frame->resource, 0, 0, frame->buffer->width, frame->buffer->height);
 }
 
 bool CScreencopyProtocolManager::copyFrameShm(SScreencopyFrame* frame, timespec* now) {

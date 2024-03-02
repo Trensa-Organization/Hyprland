@@ -1,13 +1,14 @@
 #pragma once
 
 #include "defines.hpp"
-#include "helpers/SubsurfaceTree.hpp"
+#include "desktop/Subsurface.hpp"
 #include "helpers/AnimatedVariable.hpp"
 #include "render/decorations/IHyprWindowDecoration.hpp"
 #include <deque>
 #include "config/ConfigDataValues.hpp"
 #include "helpers/Vector2D.hpp"
-#include "helpers/WLSurface.hpp"
+#include "desktop/WLSurface.hpp"
+#include "desktop/Popup.hpp"
 #include "macros.hpp"
 #include "managers/XWaylandManager.hpp"
 
@@ -28,6 +29,24 @@ enum eGroupRules {
     GROUP_LOCK_ALWAYS = 1 << 4,
     GROUP_INVADE      = 1 << 5, // Force enter a group, event if lock is engaged
     GROUP_OVERRIDE    = 1 << 6, // Override other rules
+};
+
+enum eGetWindowProperties {
+    WINDOW_ONLY      = 0,
+    RESERVED_EXTENTS = 1 << 0,
+    INPUT_EXTENTS    = 1 << 1,
+    FULL_EXTENTS     = 1 << 2,
+    FLOATING_ONLY    = 1 << 3,
+    ALLOW_FLOATING   = 1 << 4,
+    USE_PROP_TILED   = 1 << 5,
+};
+
+enum eSuppressEvents {
+    SUPPRESS_NONE               = 0,
+    SUPPRESS_FULLSCREEN         = 1 << 0,
+    SUPPRESS_MAXIMIZE           = 1 << 1,
+    SUPPRESS_ACTIVATE           = 1 << 2,
+    SUPPRESS_ACTIVATE_FOCUSONLY = 1 << 3,
 };
 
 class IWindowTransformer;
@@ -133,6 +152,7 @@ struct SWindowAdditionalConfigData {
     CWindowOverridableVar<bool> forceNoBorder         = false;
     CWindowOverridableVar<bool> forceNoShadow         = false;
     CWindowOverridableVar<bool> forceNoDim            = false;
+    CWindowOverridableVar<bool> noFocus               = false;
     CWindowOverridableVar<bool> windowDanceCompat     = false;
     CWindowOverridableVar<bool> noMaxSize             = false;
     CWindowOverridableVar<bool> dimAround             = false;
@@ -174,7 +194,6 @@ class CWindow {
     DYNLISTENER(setTitleWindow);
     DYNLISTENER(setGeometryX11U);
     DYNLISTENER(fullscreenWindow);
-    DYNLISTENER(newPopupXDG);
     DYNLISTENER(requestMove);
     DYNLISTENER(requestMinimize);
     DYNLISTENER(requestMaximize);
@@ -190,8 +209,7 @@ class CWindow {
     DYNLISTENER(ackConfigure);
     // DYNLISTENER(newSubsurfaceWindow);
 
-    CWLSurface            m_pWLSurface;
-    std::list<CWLSurface> m_lPopupSurfaces;
+    CWLSurface m_pWLSurface;
 
     union {
         wlr_xdg_surface*      xdg;
@@ -203,8 +221,8 @@ class CWindow {
     Vector2D m_vSize     = Vector2D(0, 0);
 
     // this is the real position and size used to draw the thing
-    CAnimatedVariable m_vRealPosition;
-    CAnimatedVariable m_vRealSize;
+    CAnimatedVariable<Vector2D> m_vRealPosition;
+    CAnimatedVariable<Vector2D> m_vRealSize;
 
     // for not spamming the protocols
     Vector2D                                     m_vReportedPosition;
@@ -221,16 +239,17 @@ class CWindow {
     bool        m_bIsPseudotiled = false;
     Vector2D    m_vPseudoSize    = Vector2D(0, 0);
 
-    bool        m_bFirstMap      = false; // for layouts
-    bool        m_bIsFloating    = false;
-    bool        m_bDraggingTiled = false; // for dragging around tiled windows
-    bool        m_bIsFullscreen  = false;
-    bool        m_bWasMaximized  = false;
-    uint64_t    m_iMonitorID     = -1;
-    std::string m_szTitle        = "";
-    std::string m_szInitialTitle = "";
-    std::string m_szInitialClass = "";
-    int         m_iWorkspaceID   = -1;
+    bool        m_bFirstMap           = false; // for layouts
+    bool        m_bIsFloating         = false;
+    bool        m_bDraggingTiled      = false; // for dragging around tiled windows
+    bool        m_bIsFullscreen       = false;
+    bool        m_bDontSendFullscreen = false;
+    bool        m_bWasMaximized       = false;
+    uint64_t    m_iMonitorID          = -1;
+    std::string m_szTitle             = "";
+    std::string m_szInitialTitle      = "";
+    std::string m_szInitialClass      = "";
+    int         m_iWorkspaceID        = -1;
 
     bool        m_bIsMapped = false;
 
@@ -250,24 +269,26 @@ class CWindow {
     //
 
     // For nofocus
-    bool m_bNoFocus        = false;
     bool m_bNoInitialFocus = false;
 
     // Fullscreen and Maximize
-    bool              m_bWantsInitialFullscreen = false;
-    bool              m_bNoFullscreenRequest    = false;
-    bool              m_bNoMaximizeRequest      = false;
+    bool m_bWantsInitialFullscreen = false;
 
-    SSurfaceTreeNode* m_pSurfaceTree = nullptr;
+    // bitfield eSuppressEvents
+    uint64_t m_eSuppressedEvents = SUPPRESS_NONE;
+
+    // desktop components
+    std::unique_ptr<CSubsurface> m_pSubsurfaceHead;
+    std::unique_ptr<CPopup>      m_pPopupHead;
 
     // Animated border
-    CGradientValueData m_cRealBorderColor         = {0};
-    CGradientValueData m_cRealBorderColorPrevious = {0};
-    CAnimatedVariable  m_fBorderFadeAnimationProgress;
-    CAnimatedVariable  m_fBorderAngleAnimationProgress;
+    CGradientValueData       m_cRealBorderColor         = {0};
+    CGradientValueData       m_cRealBorderColorPrevious = {0};
+    CAnimatedVariable<float> m_fBorderFadeAnimationProgress;
+    CAnimatedVariable<float> m_fBorderAngleAnimationProgress;
 
     // Fade in-out
-    CAnimatedVariable        m_fAlpha;
+    CAnimatedVariable<float> m_fAlpha;
     bool                     m_bFadingOut     = false;
     bool                     m_bReadyToDelete = false;
     Vector2D                 m_vOriginalClosedPos;  // these will be used for calculations later on in
@@ -301,13 +322,13 @@ class CWindow {
     std::vector<std::unique_ptr<IWindowTransformer>> m_vTransformers;
 
     // for alpha
-    CAnimatedVariable m_fActiveInactiveAlpha;
+    CAnimatedVariable<float> m_fActiveInactiveAlpha;
 
     // animated shadow color
-    CAnimatedVariable m_cRealShadowColor;
+    CAnimatedVariable<CColor> m_cRealShadowColor;
 
     // animated tint
-    CAnimatedVariable m_fDimPercent;
+    CAnimatedVariable<float> m_fDimPercent;
 
     // swallowing
     CWindow* m_pSwallowed = nullptr;
@@ -342,7 +363,7 @@ class CWindow {
     // methods
     CBox                     getFullWindowBoundingBox();
     SWindowDecorationExtents getFullWindowExtents();
-    CBox                     getWindowInputBox();
+    CBox                     getWindowBoxUnified(uint64_t props);
     CBox                     getWindowMainSurfaceBox();
     CBox                     getWindowIdealBoundingBoxIgnoreReserved();
     void                     addWindowDeco(std::unique_ptr<IHyprWindowDecoration> deco);
@@ -356,7 +377,7 @@ class CWindow {
     void                     createToplevelHandle();
     void                     destroyToplevelHandle();
     void                     updateToplevel();
-    void                     updateSurfaceOutputs();
+    void                     updateSurfaceScaleTransformDetails();
     void                     moveToWorkspace(int);
     CWindow*                 X11TransientFor();
     void                     onUnmap();

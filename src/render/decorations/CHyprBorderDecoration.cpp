@@ -40,7 +40,7 @@ CBox CHyprBorderDecoration::assignedBoxGlobal() {
     if (!PWORKSPACE)
         return box;
 
-    const auto WORKSPACEOFFSET = PWORKSPACE && !m_pWindow->m_bPinned ? PWORKSPACE->m_vRenderOffset.vec() : Vector2D();
+    const auto WORKSPACEOFFSET = PWORKSPACE && !m_pWindow->m_bPinned ? PWORKSPACE->m_vRenderOffset.value() : Vector2D();
     return box.translate(WORKSPACEOFFSET);
 }
 
@@ -58,10 +58,10 @@ void CHyprBorderDecoration::draw(CMonitor* pMonitor, float a, const Vector2D& of
 
     auto       grad     = m_pWindow->m_cRealBorderColor;
     const bool ANIMATED = m_pWindow->m_fBorderFadeAnimationProgress.isBeingAnimated();
-    float      a1       = a * (ANIMATED ? m_pWindow->m_fBorderFadeAnimationProgress.fl() : 1.f);
+    float      a1       = a * (ANIMATED ? m_pWindow->m_fBorderFadeAnimationProgress.value() : 1.f);
 
     if (m_pWindow->m_fBorderAngleAnimationProgress.getConfig()->pValues->internalEnabled) {
-        grad.m_fAngle += m_pWindow->m_fBorderAngleAnimationProgress.fl() * M_PI * 2;
+        grad.m_fAngle += m_pWindow->m_fBorderAngleAnimationProgress.value() * M_PI * 2;
         grad.m_fAngle = normalizeAngleRad(grad.m_fAngle);
     }
 
@@ -71,7 +71,7 @@ void CHyprBorderDecoration::draw(CMonitor* pMonitor, float a, const Vector2D& of
     g_pHyprOpenGL->renderBorder(&windowBox, grad, ROUNDING, borderSize, a1);
 
     if (ANIMATED) {
-        float a2 = a * (1.f - m_pWindow->m_fBorderFadeAnimationProgress.fl());
+        float a2 = a * (1.f - m_pWindow->m_fBorderFadeAnimationProgress.value());
         g_pHyprOpenGL->renderBorder(&windowBox, m_pWindow->m_cRealBorderColorPrevious, ROUNDING, borderSize, a2);
     }
 }
@@ -94,9 +94,9 @@ eDecorationLayer CHyprBorderDecoration::getDecorationLayer() {
 }
 
 uint64_t CHyprBorderDecoration::getDecorationFlags() {
-    static auto* const PPARTOFWINDOW = &g_pConfigManager->getConfigValuePtr("general:border_part_of_window")->intValue;
+    static auto* const PPARTOFWINDOW = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("general:border_part_of_window");
 
-    return *PPARTOFWINDOW && !doesntWantBorders() ? DECORATION_PART_OF_MAIN_WINDOW : 0;
+    return **PPARTOFWINDOW && !doesntWantBorders() ? DECORATION_PART_OF_MAIN_WINDOW : 0;
 }
 
 std::string CHyprBorderDecoration::getDisplayName() {
@@ -104,5 +104,5 @@ std::string CHyprBorderDecoration::getDisplayName() {
 }
 
 bool CHyprBorderDecoration::doesntWantBorders() {
-    return !m_pWindow->m_sSpecialRenderData.border || m_pWindow->m_bX11DoesntWantBorders;
+    return !m_pWindow->m_sSpecialRenderData.border || m_pWindow->m_bX11DoesntWantBorders || m_pWindow->getRealBorderSize() == 0;
 }

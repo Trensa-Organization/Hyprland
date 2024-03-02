@@ -59,6 +59,7 @@ class CHyprDwindleLayout : public IHyprLayout {
     virtual void                     alterSplitRatio(CWindow*, float, bool);
     virtual std::string              getLayoutName();
     virtual void                     replaceWindowDataWith(CWindow* from, CWindow* to);
+    virtual Vector2D                 predictSizeForNewWindow();
 
     virtual void                     onEnable();
     virtual void                     onDisable();
@@ -79,9 +80,11 @@ class CHyprDwindleLayout : public IHyprLayout {
     void                    applyNodeDataToWindow(SDwindleNodeData*, bool force = false);
     SDwindleNodeData*       getNodeFromWindow(CWindow*);
     SDwindleNodeData*       getFirstNodeOnWorkspace(const int&);
+    SDwindleNodeData*       getClosestNodeOnWorkspace(const int&, const Vector2D&);
     SDwindleNodeData*       getMasterNodeOnWorkspace(const int&);
 
     void                    toggleSplit(CWindow*);
+    void                    swapSplit(CWindow*);
 
     eDirection              overrideDirection = DIRECTION_DEFAULT;
 

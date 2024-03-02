@@ -1,22 +1,22 @@
 PREFIX = /usr/local
 
 legacyrenderer:
-	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -DLEGACY_RENDERER:BOOL=true -S . -B ./build -G Ninja
+	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_INSTALL_PREFIX:STRING=${PREFIX} -DLEGACY_RENDERER:BOOL=true -S . -B ./build -G Ninja
 	cmake --build ./build --config Release --target all -j`nproc 2>/dev/null || getconf NPROCESSORS_CONF`
 	chmod -R 777 ./build
 
 legacyrendererdebug:
-	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Debug -DLEGACY_RENDERER:BOOL=true -S . -B ./build -G Ninja
+	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_INSTALL_PREFIX:STRING=${PREFIX} -DLEGACY_RENDERER:BOOL=true -S . -B ./build -G Ninja
 	cmake --build ./build --config Release --target all -j`nproc 2>/dev/null || getconf NPROCESSORS_CONF`
 	chmod -R 777 ./build
 
 release:
-	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B ./build -G Ninja
+	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_INSTALL_PREFIX:STRING=${PREFIX} -S . -B ./build -G Ninja
 	cmake --build ./build --config Release --target all -j`nproc 2>/dev/null || getconf NPROCESSORS_CONF`
 	chmod -R 777 ./build
 
 debug:
-	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Debug -S . -B ./build -G Ninja
+	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_INSTALL_PREFIX:STRING=${PREFIX} -S . -B ./build -G Ninja
 	cmake --build ./build --config Debug --target all -j`nproc 2>/dev/null || getconf NPROCESSORS_CONF`
 	chmod -R 777 ./build
 
@@ -42,10 +42,10 @@ install:
 	chmod 755 ${PREFIX}/bin/Hyprland
 	chmod 755 ${PREFIX}/bin/hyprctl
 	chmod 755 ${PREFIX}/bin/hyprpm
-	ln -s -r -f ${PREFIX}/bin/Hyprland ${PREFIX}/bin/hyprland
+	cd ${PREFIX}/bin && ln -sf Hyprland hyprland
 	if [ ! -f ${PREFIX}/share/wayland-sessions/hyprland.desktop ]; then cp ./example/hyprland.desktop ${PREFIX}/share/wayland-sessions; fi
 	mkdir -p ${PREFIX}/share/hyprland
-	cp ./assets/wall_* ${PREFIX}/share/hyprland
+	cp ./assets/wall* ${PREFIX}/share/hyprland
 	mkdir -p ${PREFIX}/share/xdg-desktop-portal
 	cp ./assets/hyprland-portals.conf ${PREFIX}/share/xdg-desktop-portal
 
@@ -106,3 +106,24 @@ man:
 		--variable=section:1 \
 		--from rst \
 		--to man > ./docs/hyprctl.1
+
+asan:
+	@echo -en "!!WARNING!!\nOnly run this in the TTY.\n"
+	@pidof Hyprland > /dev/null && echo -ne "Refusing to run with Hyprland running.\n" || echo ""
+	@pidof Hyprland > /dev/null && exit 1 || echo ""
+
+	rm -rf ./wayland
+	git reset --hard
+
+	git clone --recursive https://gitlab.freedesktop.org/wayland/wayland
+	cd wayland && patch -p1 < ../scripts/waylandStatic.diff && meson setup build --buildtype=debug -Db_sanitize=address -Ddocumentation=false && ninja -C build && cd ..
+	cp ./wayland/build/src/libwayland-server.a .
+	@echo "Wayland done"
+
+	patch -p1 < ./scripts/hyprlandStaticAsan.diff
+	cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Debug -DWITH_ASAN:STRING=True -DUSE_TRACY:STRING=False -DUSE_TRACY_GPU:STRING=False -S . -B ./build -G Ninja
+	cmake --build ./build --config Debug --target all -j`nproc 2>/dev/null || getconf NPROCESSORS_CONF`
+	@echo "Hyprland done"
+
+	ASAN_OPTIONS="detect_odr_violation=0,log_path=asan.log" HYPRLAND_NO_CRASHREPORTER=1 ./build/Hyprland -c ~/.config/hypr/hyprland.conf
+	

@@ -4,9 +4,10 @@
 #include "../defines.hpp"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "../Window.hpp"
-#include "SubsurfaceTree.hpp"
+#include "../desktop/Subsurface.hpp"
+#include "../desktop/Popup.hpp"
 #include "AnimatedVariable.hpp"
-#include "WLSurface.hpp"
+#include "../desktop/WLSurface.hpp"
 #include "Region.hpp"
 
 struct SLayerRule {
@@ -18,42 +19,50 @@ struct SLayerSurface {
     SLayerSurface();
     ~SLayerSurface();
 
-    void                  applyRules();
+    void                        applyRules();
+    void                        startAnimation(bool in, bool instant = false);
+    bool                        isFadedOut();
 
-    wlr_layer_surface_v1* layerSurface;
-    wl_list               link;
+    CAnimatedVariable<Vector2D> realPosition;
+    CAnimatedVariable<Vector2D> realSize;
 
-    bool                  keyboardExclusive = false;
+    wlr_layer_surface_v1*       layerSurface;
+    wl_list                     link;
 
-    CWLSurface            surface;
-    std::list<CWLSurface> popupSurfaces;
+    bool                        keyboardExclusive = false;
+
+    CWLSurface                  surface;
+
+    // desktop components
+    std::unique_ptr<CPopup> popupHead;
 
     DYNLISTENER(destroyLayerSurface);
     DYNLISTENER(mapLayerSurface);
     DYNLISTENER(unmapLayerSurface);
     DYNLISTENER(commitLayerSurface);
-    DYNLISTENER(newPopup);
 
-    CBox                      geometry = {0, 0, 0, 0};
-    Vector2D                  position;
-    zwlr_layer_shell_v1_layer layer;
+    CBox                       geometry = {0, 0, 0, 0};
+    Vector2D                   position;
+    zwlr_layer_shell_v1_layer  layer;
 
-    bool                      mapped = false;
+    bool                       mapped = false;
 
-    int                       monitorID = -1;
+    int                        monitorID = -1;
 
-    std::string               szNamespace = "";
+    std::string                szNamespace = "";
 
-    CAnimatedVariable         alpha;
-    bool                      fadingOut     = false;
-    bool                      readyToDelete = false;
-    bool                      noProcess     = false;
-    bool                      noAnimations  = false;
+    CAnimatedVariable<float>   alpha;
+    bool                       fadingOut     = false;
+    bool                       readyToDelete = false;
+    bool                       noProcess     = false;
+    bool                       noAnimations  = false;
 
-    bool                      forceBlur        = false;
-    int                       xray             = -1;
-    bool                      ignoreAlpha      = false;
-    float                     ignoreAlphaValue = 0.f;
+    bool                       forceBlur        = false;
+    int                        xray             = -1;
+    bool                       ignoreAlpha      = false;
+    float                      ignoreAlphaValue = 0.f;
+
+    std::optional<std::string> animationStyle;
 
     // For the list lookup
     bool operator==(const SLayerSurface& rhs) const {
@@ -127,15 +136,19 @@ struct SKeyboard {
     bool               active    = false;
     bool               enabled   = true;
 
-    xkb_layout_index_t activeLayout = 0;
+    xkb_layout_index_t activeLayout        = 0;
+    xkb_state*         xkbTranslationState = nullptr;
 
     std::string        name        = "";
     std::string        xkbFilePath = "";
 
     SStringRuleNames   currentRules;
-    int                repeatRate  = 0;
-    int                repeatDelay = 0;
-    int                numlockOn   = -1;
+    int                repeatRate        = 0;
+    int                repeatDelay       = 0;
+    int                numlockOn         = -1;
+    bool               resolveBindsBySym = false;
+
+    void               updateXKBTranslationState(xkb_keymap* const keymap = nullptr);
 
     // For the list lookup
     bool operator==(const SKeyboard& rhs) const {
@@ -190,34 +203,6 @@ struct SConstraint {
 
 class CMonitor;
 
-struct SXDGPopup {
-    CWindow*       parentWindow = nullptr;
-    SLayerSurface* parentLS     = nullptr;
-    SXDGPopup*     parentPopup  = nullptr;
-    wlr_xdg_popup* popup        = nullptr;
-    CMonitor*      monitor      = nullptr;
-
-    DYNLISTENER(newPopupFromPopupXDG);
-    DYNLISTENER(destroyPopupXDG);
-    DYNLISTENER(mapPopupXDG);
-    DYNLISTENER(unmapPopupXDG);
-    DYNLISTENER(commitPopupXDG);
-    DYNLISTENER(repositionPopupXDG);
-
-    double            lx;
-    double            ly;
-
-    Vector2D          lastPos             = {};
-    bool              repositionRequested = false;
-
-    SSurfaceTreeNode* pSurfaceTree = nullptr;
-
-    // For the list lookup
-    bool operator==(const SXDGPopup& rhs) const {
-        return popup == rhs.popup;
-    }
-};
-
 struct SSeat {
     wlr_seat*  seat            = nullptr;
     wl_client* exclusiveClient = nullptr;
@@ -258,6 +243,8 @@ struct STablet {
     bool                  relativeInput = false;
 
     std::string           name = "";
+
+    std::string           boundOutput = "";
 
     //
     bool operator==(const STablet& b) const {
@@ -406,7 +393,17 @@ struct STearingController {
     DYNLISTENER(set);
     DYNLISTENER(destroy);
 
-    bool operator==(const STearingController& other) {
+    bool operator==(const STearingController& other) const {
         return pWlrHint == other.pWlrHint;
+    }
+};
+
+struct SShortcutInhibitor {
+    wlr_keyboard_shortcuts_inhibitor_v1* pWlrInhibitor = nullptr;
+
+    DYNLISTENER(destroy);
+
+    bool operator==(const SShortcutInhibitor& other) const {
+        return pWlrInhibitor == other.pWlrInhibitor;
     }
 };

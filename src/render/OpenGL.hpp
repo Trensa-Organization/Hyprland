@@ -36,8 +36,17 @@ enum eDiscardMode {
 };
 
 struct SRenderModifData {
-    Vector2D translate = {};
-    float    scale     = 1.f;
+    enum eRenderModifType {
+        RMOD_TYPE_SCALE,        /* scale by a float */
+        RMOD_TYPE_SCALECENTER,  /* scale by a float from the center */
+        RMOD_TYPE_TRANSLATE,    /* translate by a Vector2D */
+        RMOD_TYPE_ROTATE,       /* rotate by a float in rad from top left */
+        RMOD_TYPE_ROTATECENTER, /* rotate by a float in rad from center */
+    };
+
+    std::vector<std::pair<eRenderModifType, std::any>> modifs;
+
+    void                                               applyToBox(CBox& box);
 };
 
 struct SGLPixelFormat {
@@ -61,8 +70,6 @@ struct SMonitorRenderData {
     CFramebuffer blurFB;
     bool         blurFBDirty        = true;
     bool         blurFBShouldRender = false;
-
-    CBox         backgroundTexBox;
 
     // Shaders
     bool    m_bShadersInitialized = false;
@@ -94,16 +101,18 @@ struct SCurrentRenderData {
     CFramebuffer*       outFB           = nullptr; // out to render to (if offloaded, etc)
 
     CRegion             damage;
+    CRegion             finalDamage; // damage used for funal off -> main
 
     SRenderModifData    renderModif;
     float               mouseZoomFactor    = 1.f;
     bool                mouseZoomUseMouse  = true; // true by default
     bool                useNearestNeighbor = false;
+    bool                forceIntrospection = false; // cleaned in ::end()
 
     Vector2D            primarySurfaceUVTopLeft     = Vector2D(-1, -1);
     Vector2D            primarySurfaceUVBottomRight = Vector2D(-1, -1);
 
-    CBox                clipBox = {};
+    CBox                clipBox = {}; // scaled coordinates
 
     uint32_t            discardMode    = DISCARD_OPAQUE;
     float               discardOpacity = 0.f;
@@ -115,7 +124,7 @@ class CHyprOpenGLImpl {
   public:
     CHyprOpenGLImpl();
 
-    void                  begin(CMonitor*, CRegion*, CFramebuffer* fb = nullptr /* if provided, it's not a real frame */);
+    void                  begin(CMonitor*, const CRegion& damage, CFramebuffer* fb = nullptr, std::optional<CRegion> finalDamage = {});
     void                  end();
 
     void                  renderRect(CBox*, const CColor&, int round = 0);
@@ -166,6 +175,8 @@ class CHyprOpenGLImpl {
     void                  renderOffToMain(CFramebuffer* off);
     void                  bindBackOnMain();
 
+    void                  setDamage(const CRegion& damage, std::optional<CRegion> finalDamage = {});
+
     uint32_t              getPreferredReadFormat(CMonitor* pMonitor);
     const SGLPixelFormat* getPixelFormatFromDRM(uint32_t drmFormat);
 
@@ -181,7 +192,7 @@ class CHyprOpenGLImpl {
     std::unordered_map<CWindow*, CFramebuffer>        m_mWindowFramebuffers;
     std::unordered_map<SLayerSurface*, CFramebuffer>  m_mLayerFramebuffers;
     std::unordered_map<CMonitor*, SMonitorRenderData> m_mMonitorRenderResources;
-    std::unordered_map<CMonitor*, CTexture>           m_mMonitorBGTextures;
+    std::unordered_map<CMonitor*, CFramebuffer>       m_mMonitorBGFBs;
 
     struct {
         PFNGLEGLIMAGETARGETRENDERBUFFERSTORAGEOESPROC glEGLImageTargetRenderbufferStorageOES = nullptr;
@@ -219,7 +230,7 @@ class CHyprOpenGLImpl {
     void          renderTextureInternalWithDamage(const CTexture&, CBox* pBox, float a, CRegion* damage, int round = 0, bool discardOpaque = false, bool noAA = false,
                                                   bool allowCustomUV = false, bool allowDim = false);
     void          renderTexturePrimitive(const CTexture& tex, CBox* pBox);
-    void          renderSplash(cairo_t* const, cairo_surface_t* const, double);
+    void          renderSplash(cairo_t* const, cairo_surface_t* const, double offset, const Vector2D& size);
 
     void          preBlurForCurrentMonitor();
 

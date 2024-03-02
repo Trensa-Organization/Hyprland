@@ -178,6 +178,18 @@ void CToplevelExportProtocolManager::captureToplevel(wl_client* client, wl_resou
     const auto PMONITOR = g_pCompositor->getMonitorFromID(PFRAME->pWindow->m_iMonitorID);
 
     g_pHyprRenderer->makeEGLCurrent();
+
+    if (g_pHyprOpenGL->m_mMonitorRenderResources.contains(PMONITOR)) {
+        const auto& RDATA = g_pHyprOpenGL->m_mMonitorRenderResources.at(PMONITOR);
+        // bind the fb for its format. Suppress gl errors.
+#ifndef GLES2
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, RDATA.offloadFB.m_iFb);
+#else
+        glBindFramebuffer(GL_FRAMEBUFFER, RDATA.offloadFB.m_iFb);
+#endif
+    } else
+        Debug::log(ERR, "No RDATA in toplevelexport???");
+
     PFRAME->shmFormat = g_pHyprOpenGL->getPreferredReadFormat(PMONITOR);
     if (PFRAME->shmFormat == DRM_FORMAT_INVALID) {
         Debug::log(ERR, "No format supported by renderer in capture toplevel");
@@ -200,7 +212,7 @@ void CToplevelExportProtocolManager::captureToplevel(wl_client* client, wl_resou
         PFRAME->dmabufFormat = DRM_FORMAT_INVALID;
     }
 
-    PFRAME->box = {0, 0, (int)(PFRAME->pWindow->m_vRealSize.vec().x * PMONITOR->scale), (int)(PFRAME->pWindow->m_vRealSize.vec().y * PMONITOR->scale)};
+    PFRAME->box = {0, 0, (int)(PFRAME->pWindow->m_vRealSize.value().x * PMONITOR->scale), (int)(PFRAME->pWindow->m_vRealSize.value().y * PMONITOR->scale)};
     int ow, oh;
     wlr_output_effective_resolution(PMONITOR->output, &ow, &oh);
     PFRAME->box.transform(PMONITOR->transform, ow, oh).round();
@@ -221,6 +233,13 @@ void CToplevelExportProtocolManager::copyFrame(wl_client* client, wl_resource* r
 
     if (!PFRAME) {
         Debug::log(ERR, "No frame in copyFrame??");
+        return;
+    }
+
+    if (!g_pCompositor->windowValidMapped(PFRAME->pWindow)) {
+        Debug::log(ERR, "Client requested sharing of window handle {:x} which is gone!", (uintptr_t)PFRAME->pWindow);
+        hyprland_toplevel_export_frame_v1_send_failed(PFRAME->resource);
+        removeFrame(PFRAME);
         return;
     }
 
@@ -303,7 +322,7 @@ void CToplevelExportProtocolManager::onOutputCommit(CMonitor* pMonitor, wlr_outp
         if (PMONITOR != g_pCompositor->getMonitorFromID(f->pWindow->m_iMonitorID))
             continue;
 
-        CBox geometry = {f->pWindow->m_vRealPosition.vec().x, f->pWindow->m_vRealPosition.vec().y, f->pWindow->m_vRealSize.vec().x, f->pWindow->m_vRealSize.vec().y};
+        CBox geometry = {f->pWindow->m_vRealPosition.value().x, f->pWindow->m_vRealPosition.value().y, f->pWindow->m_vRealSize.value().x, f->pWindow->m_vRealSize.value().y};
 
         if (!wlr_output_layout_intersects(g_pCompositor->m_sWLROutputLayout, pMonitor->output, geometry.pWlr()))
             continue;
@@ -385,7 +404,7 @@ bool CToplevelExportProtocolManager::copyFrameShm(SScreencopyFrame* frame, times
     g_pHyprRenderer->m_bBlockSurfaceFeedback = false;
 
     if (frame->overlayCursor)
-        g_pHyprRenderer->renderSoftwareCursors(PMONITOR, fakeDamage, g_pInputManager->getMouseCoordsInternal() - frame->pWindow->m_vRealPosition.vec());
+        g_pHyprRenderer->renderSoftwareCursors(PMONITOR, fakeDamage, g_pInputManager->getMouseCoordsInternal() - frame->pWindow->m_vRealPosition.value());
 
     const auto PFORMAT = g_pHyprOpenGL->getPixelFormatFromDRM(format);
     if (!PFORMAT) {
@@ -431,7 +450,7 @@ bool CToplevelExportProtocolManager::copyFrameDmabuf(SScreencopyFrame* frame, ti
     g_pHyprRenderer->m_bBlockSurfaceFeedback = false;
 
     if (frame->overlayCursor)
-        g_pHyprRenderer->renderSoftwareCursors(PMONITOR, fakeDamage, g_pInputManager->getMouseCoordsInternal() - frame->pWindow->m_vRealPosition.vec());
+        g_pHyprRenderer->renderSoftwareCursors(PMONITOR, fakeDamage, g_pInputManager->getMouseCoordsInternal() - frame->pWindow->m_vRealPosition.value());
 
     g_pHyprRenderer->endRender();
     return true;

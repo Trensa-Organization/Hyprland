@@ -122,10 +122,6 @@ void CInputMethodRelay::onNewIME(wlr_input_method_v2* pIME) {
 
                     Debug::log(LOG, "IME TextInput Keyboard Grab destroy");
 
-                    if (m_pKeyboardGrab->pKeyboard) {
-                        wlr_seat_keyboard_notify_modifiers(g_pCompositor->m_sSeat.seat, &m_pKeyboardGrab->pKeyboard->modifiers);
-                    }
-
                     m_pKeyboardGrab.reset(nullptr);
                 },
                 m_pKeyboardGrab.get(), "IME Keyboard Grab");
@@ -196,8 +192,8 @@ void CInputMethodRelay::updateInputPopup(SIMEPopup* pPopup) {
         const auto PWINDOW = g_pCompositor->getWindowFromSurface(PFOCUSEDSURFACE);
 
         if (PWINDOW) {
-            parentPos  = PWINDOW->m_vRealPosition.goalv();
-            parentSize = PWINDOW->m_vRealSize.goalv();
+            parentPos  = PWINDOW->m_vRealPosition.goal();
+            parentSize = PWINDOW->m_vRealSize.goal();
             pMonitor   = g_pCompositor->getMonitorFromID(PWINDOW->m_iMonitorID);
         }
     }
@@ -302,7 +298,7 @@ void CInputMethodRelay::damagePopup(SIMEPopup* pPopup) {
         const auto PWINDOW = g_pCompositor->getWindowFromSurface(PFOCUSEDSURFACE);
 
         if (PWINDOW) {
-            parentPos = PWINDOW->m_vRealPosition.goalv();
+            parentPos = PWINDOW->m_vRealPosition.goal();
         }
     }
 

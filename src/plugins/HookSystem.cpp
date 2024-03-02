@@ -74,9 +74,10 @@ CFunctionHook::SAssembly CFunctionHook::fixInstructionProbeRIPCalls(const SInstr
         std::string code = probe.assembly.substr(lastAsmNewline, probe.assembly.find("\n", lastAsmNewline) - lastAsmNewline);
         if (code.contains("%rip")) {
             CVarList       tokens{code, 0, 's'};
-            size_t         plusPresent = tokens[1][0] == '+' ? 1 : 0;
-            std::string    addr        = tokens[1].substr(plusPresent, tokens[1].find("(%rip)") - plusPresent);
-            const uint64_t OFFSET      = configStringToInt(addr);
+            size_t         plusPresent  = tokens[1][0] == '+' ? 1 : 0;
+            size_t         minusPresent = tokens[1][0] == '-' ? 1 : 0;
+            std::string    addr         = tokens[1].substr((plusPresent || minusPresent), tokens[1].find("(%rip)") - (plusPresent || minusPresent));
+            const uint64_t OFFSET       = (minusPresent ? -1 : 1) * configStringToInt(addr);
             if (OFFSET == 0)
                 return {};
             const uint64_t DESTINATION = currentAddress + OFFSET + len;
@@ -190,9 +191,9 @@ bool CFunctionHook::hook() {
         (uint64_t)((uint8_t*)m_pSource + sizeof(ABSOLUTE_JMP_ADDRESS));
 
     // make jump to hk
-    const auto     PAGESIZE  = sysconf(_SC_PAGE_SIZE);
-    const uint8_t* PROTSTART = (uint8_t*)m_pSource - ((uint64_t)m_pSource % PAGESIZE);
-    const size_t   PROTLEN   = std::ceil((float)(ORIGSIZE + ((uint64_t)m_pSource - (uint64_t)PROTSTART)) / (float)PAGESIZE) * PAGESIZE;
+    const auto     PAGESIZE_VAR = sysconf(_SC_PAGE_SIZE);
+    const uint8_t* PROTSTART    = (uint8_t*)m_pSource - ((uint64_t)m_pSource % PAGESIZE_VAR);
+    const size_t   PROTLEN      = std::ceil((float)(ORIGSIZE + ((uint64_t)m_pSource - (uint64_t)PROTSTART)) / (float)PAGESIZE_VAR) * PAGESIZE_VAR;
     mprotect((uint8_t*)PROTSTART, PROTLEN, PROT_READ | PROT_WRITE | PROT_EXEC);
     memcpy((uint8_t*)m_pSource, ABSOLUTE_JMP_ADDRESS, sizeof(ABSOLUTE_JMP_ADDRESS));
 
