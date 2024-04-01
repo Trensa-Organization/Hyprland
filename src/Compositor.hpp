@@ -21,7 +21,7 @@
 #include "debug/HyprDebugOverlay.hpp"
 #include "debug/HyprNotificationOverlay.hpp"
 #include "helpers/Monitor.hpp"
-#include "helpers/Workspace.hpp"
+#include "desktop/Workspace.hpp"
 #include "Window.hpp"
 #include "render/Renderer.hpp"
 #include "render/OpenGL.hpp"
@@ -57,7 +57,6 @@ class CCompositor {
     wlr_layer_shell_v1*                        m_sWLRLayerShell;
     wlr_xdg_shell*                             m_sWLRXDGShell;
     wlr_cursor*                                m_sWLRCursor;
-    wlr_xcursor_manager*                       m_sWLRXCursorMgr;
     wlr_virtual_keyboard_manager_v1*           m_sWLRVKeyboardMgr;
     wlr_output_manager_v1*                     m_sWLROutputMgr;
     wlr_presentation*                          m_sWLRPresentation;
@@ -93,9 +92,7 @@ class CCompositor {
     std::vector<std::shared_ptr<CMonitor>>    m_vMonitors;
     std::vector<std::shared_ptr<CMonitor>>    m_vRealMonitors; // for all monitors, even those turned off
     std::vector<std::unique_ptr<CWindow>>     m_vWindows;
-    std::vector<std::unique_ptr<SXDGPopup>>   m_vXDGPopups;
     std::vector<std::unique_ptr<CWorkspace>>  m_vWorkspaces;
-    std::vector<std::unique_ptr<SSubsurface>> m_vSubsurfaces;
     std::vector<CWindow*>                     m_vWindowsFadingOut;
     std::vector<SLayerSurface*>               m_vSurfacesFadingOut;
 
@@ -143,7 +140,6 @@ class CCompositor {
     Vector2D       vectorToSurfaceLocal(const Vector2D&, CWindow*, wlr_surface*);
     CMonitor*      getMonitorFromOutput(wlr_output*);
     CMonitor*      getRealMonitorFromOutput(wlr_output*);
-    CWindow*       getWindowForPopup(wlr_xdg_popup*);
     CWindow*       getWindowFromSurface(wlr_surface*);
     CWindow*       getWindowFromHandle(uint32_t);
     CWindow*       getWindowFromZWLRHandle(wl_resource*);
@@ -169,7 +165,6 @@ class CCompositor {
     int            getNextAvailableNamedWorkspace();
     bool           isPointOnAnyMonitor(const Vector2D&);
     bool           isPointOnReservedArea(const Vector2D& point, const CMonitor* monitor = nullptr);
-    CWindow*       getConstraintWindow(SMouse*);
     CMonitor*      getMonitorInDirection(const char&);
     CMonitor*      getMonitorInDirection(CMonitor*, const char&);
     void           updateAllWindowsAnimatedDecorationValues();
@@ -180,7 +175,7 @@ class CCompositor {
     void           swapActiveWorkspaces(CMonitor*, CMonitor*);
     CMonitor*      getMonitorFromString(const std::string&);
     bool           workspaceIDOutOfBounds(const int64_t&);
-    void           setWindowFullscreen(CWindow*, bool, eFullscreenMode);
+    void           setWindowFullscreen(CWindow*, bool, eFullscreenMode mode = FULLSCREEN_INVALID);
     void           updateFullscreenFadeOnWorkspace(CWorkspace*);
     CWindow*       getX11Parent(CWindow*);
     void           scheduleFrameForMonitor(CMonitor*);
@@ -237,4 +232,7 @@ inline std::map<std::string, xcb_atom_t> HYPRATOMS = {HYPRATOM("_NET_WM_WINDOW_T
                                                       HYPRATOM("_NET_WM_WINDOW_TYPE_POPUP_MENU"),
                                                       HYPRATOM("_NET_WM_WINDOW_TYPE_TOOLTIP"),
                                                       HYPRATOM("_NET_WM_WINDOW_TYPE_NOTIFICATION"),
-                                                      HYPRATOM("_KDE_NET_WM_WINDOW_TYPE_OVERRIDE")};
+                                                      HYPRATOM("_KDE_NET_WM_WINDOW_TYPE_OVERRIDE"),
+                                                      HYPRATOM("_NET_SUPPORTING_WM_CHECK"),
+                                                      HYPRATOM("_NET_WM_NAME"),
+                                                      HYPRATOM("UTF8_STRING")};

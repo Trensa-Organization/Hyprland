@@ -3,7 +3,6 @@
 #include "../defines.hpp"
 #include <list>
 #include "../helpers/Monitor.hpp"
-#include "../helpers/Workspace.hpp"
 #include "../Window.hpp"
 #include "OpenGL.hpp"
 #include "Renderbuffer.hpp"
@@ -11,6 +10,7 @@
 #include "../helpers/Region.hpp"
 
 struct SMonitorRule;
+class CWorkspace;
 
 // TODO: add fuller damage tracking for updating only parts of a window
 enum DAMAGETRACKINGMODES {
@@ -59,7 +59,7 @@ class CHyprRenderer {
     void                            setCursorHidden(bool hide);
     void                            calculateUVForSurface(CWindow*, wlr_surface*, bool main = false, const Vector2D& projSize = {}, bool fixMisalignedFSV1 = false);
     std::tuple<float, float, float> getRenderTimes(CMonitor* pMonitor); // avg max min
-    void                            renderLockscreen(CMonitor* pMonitor, timespec* now);
+    void                            renderLockscreen(CMonitor* pMonitor, timespec* now, const CBox& geometry);
     void                            setOccludedForBackLayers(CRegion& region, CWorkspace* pWorkspace);
     void                            setOccludedForMainWorkspace(CRegion& region, CWorkspace* pWorkspace); // TODO: merge occlusion methods
     bool                            canSkipBackBufferClear(CMonitor* pMonitor);

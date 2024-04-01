@@ -46,12 +46,12 @@ void Events::listener_newLayerSurface(wl_listener* listener, void* data) {
     layerSurface->hyprListener_destroyLayerSurface.initCallback(&WLRLAYERSURFACE->events.destroy, &Events::listener_destroyLayerSurface, layerSurface, "layerSurface");
     layerSurface->hyprListener_mapLayerSurface.initCallback(&WLRLAYERSURFACE->surface->events.map, &Events::listener_mapLayerSurface, layerSurface, "layerSurface");
     layerSurface->hyprListener_unmapLayerSurface.initCallback(&WLRLAYERSURFACE->surface->events.unmap, &Events::listener_unmapLayerSurface, layerSurface, "layerSurface");
-    layerSurface->hyprListener_newPopup.initCallback(&WLRLAYERSURFACE->events.new_popup, &Events::listener_newPopup, layerSurface, "layerSurface");
 
     layerSurface->layerSurface = WLRLAYERSURFACE;
     layerSurface->layer        = WLRLAYERSURFACE->current.layer;
     WLRLAYERSURFACE->data      = layerSurface;
     layerSurface->monitorID    = PMONITOR->ID;
+    layerSurface->popupHead    = std::make_unique<CPopup>(layerSurface);
 
     layerSurface->forceBlur = g_pConfigManager->shouldBlurLS(layerSurface->szNamespace);
 
@@ -65,6 +65,8 @@ void Events::listener_destroyLayerSurface(void* owner, void* data) {
     Debug::log(LOG, "LayerSurface {:x} destroyed", (uintptr_t)layersurface->layerSurface);
 
     const auto PMONITOR = g_pCompositor->getMonitorFromID(layersurface->monitorID);
+
+    layersurface->popupHead.reset();
 
     if (!g_pCompositor->getMonitorFromID(layersurface->monitorID))
         Debug::log(WARN, "Layersurface destroyed on an invalid monitor (removed?)");
@@ -87,7 +89,6 @@ void Events::listener_destroyLayerSurface(void* owner, void* data) {
     layersurface->hyprListener_destroyLayerSurface.removeCallback();
     layersurface->hyprListener_mapLayerSurface.removeCallback();
     layersurface->hyprListener_unmapLayerSurface.removeCallback();
-    layersurface->hyprListener_newPopup.removeCallback();
 
     // rearrange to fix the reserved areas
     if (PMONITOR) {
@@ -112,9 +113,6 @@ void Events::listener_mapLayerSurface(void* owner, void* data) {
     layersurface->mapped            = true;
     layersurface->keyboardExclusive = layersurface->layerSurface->current.keyboard_interactive;
     layersurface->surface           = layersurface->layerSurface->surface;
-
-    // anim
-    layersurface->alpha.setConfig(g_pConfigManager->getAnimationPropertyConfig("fadeIn"));
 
     // fix if it changed its mon
     const auto PMONITOR = g_pCompositor->getMonitorFromOutput(layersurface->layerSurface->output);
@@ -147,7 +145,7 @@ void Events::listener_mapLayerSurface(void* owner, void* data) {
 
     const bool GRABSFOCUS = layersurface->layerSurface->current.keyboard_interactive != ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE &&
         // don't focus if constrained
-        (!g_pCompositor->m_sSeat.mouse || !g_pCompositor->m_sSeat.mouse->currentConstraint);
+        (!g_pCompositor->m_sSeat.mouse || !g_pInputManager->isConstrained());
 
     if (GRABSFOCUS) {
         g_pCompositor->focusSurface(layersurface->layerSurface->surface);
@@ -156,6 +154,7 @@ void Events::listener_mapLayerSurface(void* owner, void* data) {
             g_pInputManager->getMouseCoordsInternal() - Vector2D(layersurface->geometry.x + PMONITOR->vecPosition.x, layersurface->geometry.y + PMONITOR->vecPosition.y);
         wlr_seat_pointer_notify_enter(g_pCompositor->m_sSeat.seat, layersurface->layerSurface->surface, LOCAL.x, LOCAL.y);
         wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, 0, LOCAL.x, LOCAL.y);
+        g_pInputManager->m_bEmptyFocusCursorSet = false;
     }
 
     layersurface->position = Vector2D(layersurface->geometry.x, layersurface->geometry.y);
@@ -166,8 +165,7 @@ void Events::listener_mapLayerSurface(void* owner, void* data) {
     const auto WORKSPACE  = g_pCompositor->getWorkspaceByID(PMONITOR->activeWorkspace);
     const bool FULLSCREEN = WORKSPACE->m_bHasFullscreenWindow && WORKSPACE->m_efFullscreenMode == FULLSCREEN_FULL;
 
-    layersurface->alpha.setValue(0);
-    layersurface->alpha         = ((layersurface->layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP && FULLSCREEN && !GRABSFOCUS) ? 0.f : 1.f);
+    layersurface->startAnimation(!(layersurface->layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP && FULLSCREEN && !GRABSFOCUS));
     layersurface->readyToDelete = false;
     layersurface->fadingOut     = false;
 
@@ -198,22 +196,16 @@ void Events::listener_unmapLayerSurface(void* owner, void* data) {
 
         layersurface->mapped = false;
 
-        layersurface->fadingOut = true;
-
-        layersurface->alpha.setValueAndWarp(0.f);
+        layersurface->startAnimation(false);
         return;
     }
 
-    // anim
-    layersurface->alpha.setConfig(g_pConfigManager->getAnimationPropertyConfig("fadeOut"));
-
     // make a snapshot and start fade
     g_pHyprOpenGL->makeLayerSnapshot(layersurface);
-    layersurface->alpha = 0.f;
+
+    layersurface->startAnimation(false);
 
     layersurface->mapped = false;
-
-    layersurface->fadingOut = true;
 
     g_pCompositor->addToFadingOutSafe(layersurface);
 
@@ -244,7 +236,7 @@ void Events::listener_unmapLayerSurface(void* owner, void* data) {
             foundSurface = g_pCompositor->vectorToLayerSurface(g_pInputManager->getMouseCoordsInternal(), &PMONITOR->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_TOP],
                                                                &surfaceCoords, &pFoundLayerSurface);
 
-        if (!foundSurface) {
+        if (!foundSurface && g_pCompositor->m_pLastWindow) {
             // if there isn't any, focus the last window
             const auto PLASTWINDOW = g_pCompositor->m_pLastWindow;
             g_pCompositor->focusWindow(nullptr);
@@ -335,8 +327,20 @@ void Events::listener_commitLayerSurface(void* owner, void* data) {
         }
     }
 
-    if (layersurface->layerSurface->current.keyboard_interactive &&
-        (!g_pCompositor->m_sSeat.mouse || !g_pCompositor->m_sSeat.mouse->currentConstraint) // don't focus if constrained
+    if (layersurface->realPosition.goal() != layersurface->geometry.pos()) {
+        if (layersurface->realPosition.isBeingAnimated())
+            layersurface->realPosition = layersurface->geometry.pos();
+        else
+            layersurface->realPosition.setValueAndWarp(layersurface->geometry.pos());
+    }
+    if (layersurface->realSize.goal() != layersurface->geometry.size()) {
+        if (layersurface->realSize.isBeingAnimated())
+            layersurface->realSize = layersurface->geometry.size();
+        else
+            layersurface->realSize.setValueAndWarp(layersurface->geometry.size());
+    }
+
+    if (layersurface->layerSurface->current.keyboard_interactive && (!g_pCompositor->m_sSeat.mouse || !g_pInputManager->isConstrained()) // don't focus if constrained
         && !layersurface->keyboardExclusive && layersurface->mapped) {
         g_pCompositor->focusSurface(layersurface->layerSurface->surface);
 
@@ -344,7 +348,8 @@ void Events::listener_commitLayerSurface(void* owner, void* data) {
             g_pInputManager->getMouseCoordsInternal() - Vector2D(layersurface->geometry.x + PMONITOR->vecPosition.x, layersurface->geometry.y + PMONITOR->vecPosition.y);
         wlr_seat_pointer_notify_enter(g_pCompositor->m_sSeat.seat, layersurface->layerSurface->surface, LOCAL.x, LOCAL.y);
         wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, 0, LOCAL.x, LOCAL.y);
-    } else if (!layersurface->layerSurface->current.keyboard_interactive && (!g_pCompositor->m_sSeat.mouse || !g_pCompositor->m_sSeat.mouse->currentConstraint) &&
+        g_pInputManager->m_bEmptyFocusCursorSet = false;
+    } else if (!layersurface->layerSurface->current.keyboard_interactive && (!g_pCompositor->m_sSeat.mouse || !g_pInputManager->isConstrained()) &&
                layersurface->keyboardExclusive) {
         g_pInputManager->refocus();
     }

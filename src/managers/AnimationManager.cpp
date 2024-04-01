@@ -1,6 +1,8 @@
 #include "AnimationManager.hpp"
 #include "../Compositor.hpp"
 #include "HookSystemManager.hpp"
+#include "macros.hpp"
+#include "../config/ConfigValue.hpp"
 
 int wlTick(void* data) {
     if (g_pAnimationManager)
@@ -51,22 +53,22 @@ void CAnimationManager::tick() {
     if (m_vActiveAnimatedVariables.empty())
         return;
 
-    bool               animGlobalDisabled = false;
+    bool        animGlobalDisabled = false;
 
-    static auto* const PANIMENABLED = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("animations:enabled");
+    static auto PANIMENABLED = CConfigValue<Hyprlang::INT>("animations:enabled");
 
-    if (!**PANIMENABLED)
+    if (!*PANIMENABLED)
         animGlobalDisabled = true;
 
-    static auto* const              PSHADOWSENABLED = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:drop_shadow");
+    static auto* const                  PSHADOWSENABLED = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("decoration:drop_shadow");
 
-    const auto                      DEFAULTBEZIER = m_mBezierCurves.find("default");
+    const auto                          DEFAULTBEZIER = m_mBezierCurves.find("default");
 
-    std::vector<CAnimatedVariable*> animationEndedVars;
+    std::vector<CBaseAnimatedVariable*> animationEndedVars;
 
     for (auto& av : m_vActiveAnimatedVariables) {
 
-        if (av->m_eDamagePolicy == AVARDAMAGE_SHADOW && !**PSHADOWSENABLED) {
+        if (av->m_eDamagePolicy == AVARDAMAGE_SHADOW && !*PSHADOWSENABLED) {
             av->warp(false);
             animationEndedVars.push_back(av);
             continue;
@@ -84,8 +86,13 @@ void CAnimationManager::tick() {
 
         CBox       WLRBOXPREV = {0, 0, 0, 0};
         if (PWINDOW) {
-            WLRBOXPREV = PWINDOW->getFullWindowBoundingBox();
-            PMONITOR   = g_pCompositor->getMonitorFromID(PWINDOW->m_iMonitorID);
+            CBox       bb               = PWINDOW->getFullWindowBoundingBox();
+            const auto PWINDOWWORKSPACE = g_pCompositor->getWorkspaceByID(PWINDOW->m_iWorkspaceID);
+            if (PWINDOWWORKSPACE)
+                bb.translate(PWINDOWWORKSPACE->m_vRenderOffset.value());
+            WLRBOXPREV = bb;
+
+            PMONITOR = g_pCompositor->getMonitorFromID(PWINDOW->m_iMonitorID);
             if (!PMONITOR)
                 continue;
             animationsDisabled = animationsDisabled || PWINDOW->m_sAdditionalConfigData.forceNoAnims;
@@ -93,15 +100,29 @@ void CAnimationManager::tick() {
             PMONITOR = g_pCompositor->getMonitorFromID(PWORKSPACE->m_iMonitorID);
             if (!PMONITOR)
                 continue;
-            WLRBOXPREV = {(int)PMONITOR->vecPosition.x, (int)PMONITOR->vecPosition.y, (int)PMONITOR->vecSize.x, (int)PMONITOR->vecSize.y};
+            WLRBOXPREV = {PMONITOR->vecPosition, PMONITOR->vecSize};
 
             // TODO: just make this into a damn callback already vax...
             for (auto& w : g_pCompositor->m_vWindows) {
                 if (!w->isHidden() && w->m_bIsMapped && w->m_bIsFloating)
                     g_pHyprRenderer->damageWindow(w.get());
             }
+
+            // if a workspace window is on any monitor, damage it
+            for (auto& w : g_pCompositor->m_vWindows) {
+                for (auto& m : g_pCompositor->m_vMonitors) {
+                    if (w->m_iWorkspaceID == PWORKSPACE->m_iID && g_pCompositor->windowValidMapped(w.get()) && g_pHyprRenderer->shouldRenderWindow(w.get(), m.get(), PWORKSPACE)) {
+                        CBox bb = w->getFullWindowBoundingBox();
+                        bb.translate(PWORKSPACE->m_vRenderOffset.value());
+                        if (PWORKSPACE->m_bIsSpecialWorkspace)
+                            bb.scaleFromCenter(1.1); // for some reason special ws windows getting border artifacts if you close it too quickly...
+                        bb.intersection({m->vecPosition, m->vecSize});
+                        g_pHyprRenderer->damageBox(&bb);
+                    }
+                }
+            }
         } else if (PLAYER) {
-            WLRBOXPREV = PLAYER->geometry;
+            WLRBOXPREV = CBox{PLAYER->realPosition.value(), PLAYER->realSize.value()};
             PMONITOR   = g_pCompositor->getMonitorFromVector(Vector2D(PLAYER->geometry.x, PLAYER->geometry.y) + Vector2D(PLAYER->geometry.width, PLAYER->geometry.height) / 2.f);
             if (!PMONITOR)
                 continue;
@@ -113,78 +134,48 @@ void CAnimationManager::tick() {
         // beziers are with a switch unforto
         // TODO: maybe do something cleaner
 
-        switch (av->m_eVarType) {
+        auto updateVariable = [&]<Animable T>(CAnimatedVariable<T>& av) {
+            // for disabled anims just warp
+            if (av.m_pConfig->pValues->internalEnabled == 0 || animationsDisabled) {
+                av.warp(false);
+                return;
+            }
+
+            if (SPENT >= 1.f || av.m_Begun == av.m_Goal) {
+                av.warp(false);
+                return;
+            }
+
+            const auto DELTA  = av.m_Goal - av.m_Begun;
+            const auto BEZIER = m_mBezierCurves.find(av.m_pConfig->pValues->internalBezier);
+
+            if (BEZIER != m_mBezierCurves.end())
+                av.m_Value = av.m_Begun + DELTA * BEZIER->second.getYForPoint(SPENT);
+            else
+                av.m_Value = av.m_Begun + DELTA * DEFAULTBEZIER->second.getYForPoint(SPENT);
+        };
+
+        switch (av->m_Type) {
             case AVARTYPE_FLOAT: {
-                // for disabled anims just warp
-                if (av->m_pConfig->pValues->internalEnabled == 0 || animationsDisabled) {
-                    av->warp(false);
-                    break;
-                }
-
-                if (SPENT >= 1.f || av->m_fBegun == av->m_fGoal) {
-                    av->warp(false);
-                    break;
-                }
-
-                const auto DELTA  = av->m_fGoal - av->m_fBegun;
-                const auto BEZIER = m_mBezierCurves.find(av->m_pConfig->pValues->internalBezier);
-
-                if (BEZIER != m_mBezierCurves.end())
-                    av->m_fValue = av->m_fBegun + BEZIER->second.getYForPoint(SPENT) * DELTA;
-                else
-                    av->m_fValue = av->m_fBegun + DEFAULTBEZIER->second.getYForPoint(SPENT) * DELTA;
+                auto typedAv = static_cast<CAnimatedVariable<float>*>(av);
+                updateVariable(*typedAv);
                 break;
             }
             case AVARTYPE_VECTOR: {
-                // for disabled anims just warp
-                if (av->m_pConfig->pValues->internalEnabled == 0 || animationsDisabled) {
-                    av->warp(false);
-                    break;
-                }
-
-                if (SPENT >= 1.f || av->m_vBegun == av->m_vGoal) {
-                    av->warp(false);
-                    break;
-                }
-
-                const auto DELTA  = av->m_vGoal - av->m_vBegun;
-                const auto BEZIER = m_mBezierCurves.find(av->m_pConfig->pValues->internalBezier);
-
-                if (BEZIER != m_mBezierCurves.end())
-                    av->m_vValue = av->m_vBegun + DELTA * BEZIER->second.getYForPoint(SPENT);
-                else
-                    av->m_vValue = av->m_vBegun + DELTA * DEFAULTBEZIER->second.getYForPoint(SPENT);
+                auto typedAv = static_cast<CAnimatedVariable<Vector2D>*>(av);
+                updateVariable(*typedAv);
                 break;
             }
             case AVARTYPE_COLOR: {
-                // for disabled anims just warp
-                if (av->m_pConfig->pValues->internalEnabled == 0 || animationsDisabled) {
-                    av->warp(false);
-                    break;
-                }
-
-                if (SPENT >= 1.f || av->m_cBegun == av->m_cGoal) {
-                    av->warp(false);
-                    break;
-                }
-
-                const auto DELTA  = av->m_cGoal - av->m_cBegun;
-                const auto BEZIER = m_mBezierCurves.find(av->m_pConfig->pValues->internalBezier);
-
-                if (BEZIER != m_mBezierCurves.end())
-                    av->m_cValue = av->m_cBegun + DELTA * BEZIER->second.getYForPoint(SPENT);
-                else
-                    av->m_cValue = av->m_cBegun + DELTA * DEFAULTBEZIER->second.getYForPoint(SPENT);
+                auto typedAv = static_cast<CAnimatedVariable<CColor>*>(av);
+                updateVariable(*typedAv);
                 break;
             }
-            default: {
-                ;
-            }
+            default: UNREACHABLE();
         }
-
         // set size and pos if valid, but only if damage policy entire (dont if border for example)
         if (g_pCompositor->windowValidMapped(PWINDOW) && av->m_eDamagePolicy == AVARDAMAGE_ENTIRE && PWINDOW->m_iX11Type != 2)
-            g_pXWaylandManager->setWindowSize(PWINDOW, PWINDOW->m_vRealSize.goalv());
+            g_pXWaylandManager->setWindowSize(PWINDOW, PWINDOW->m_vRealSize.goal());
 
         // check if we did not finish animating. If so, trigger onAnimationEnd.
         if (!av->isBeingAnimated())
@@ -203,7 +194,10 @@ void CAnimationManager::tick() {
 
                 if (PWINDOW) {
                     PWINDOW->updateWindowDecos();
-                    g_pHyprRenderer->damageWindow(PWINDOW);
+                    auto       bb               = PWINDOW->getFullWindowBoundingBox();
+                    const auto PWINDOWWORKSPACE = g_pCompositor->getWorkspaceByID(PWINDOW->m_iWorkspaceID);
+                    bb.translate(PWINDOWWORKSPACE->m_vRenderOffset.value());
+                    g_pHyprRenderer->damageBox(&bb);
                 } else if (PWORKSPACE) {
                     for (auto& w : g_pCompositor->m_vWindows) {
                         if (!w->m_bIsMapped || w->isHidden())
@@ -216,7 +210,7 @@ void CAnimationManager::tick() {
 
                         if (w->m_bIsFloating) {
                             auto bb = w->getFullWindowBoundingBox();
-                            bb.translate(PWORKSPACE->m_vRenderOffset.vec());
+                            bb.translate(PWORKSPACE->m_vRenderOffset.value());
                             g_pHyprRenderer->damageBox(&bb);
                         }
                     }
@@ -250,7 +244,10 @@ void CAnimationManager::tick() {
                                            BORDERSIZE + ROUNDINGSIZE); // bottom
 
                 // damage for new box
-                const CBox WLRBOXNEW = {PWINDOW->m_vRealPosition.vec().x, PWINDOW->m_vRealPosition.vec().y, PWINDOW->m_vRealSize.vec().x, PWINDOW->m_vRealSize.vec().y};
+                CBox       WLRBOXNEW        = {PWINDOW->m_vRealPosition.value(), PWINDOW->m_vRealSize.value()};
+                const auto PWINDOWWORKSPACE = g_pCompositor->getWorkspaceByID(PWINDOW->m_iWorkspaceID);
+                if (PWINDOWWORKSPACE)
+                    WLRBOXNEW.translate(PWINDOWWORKSPACE->m_vRenderOffset.value());
                 g_pHyprRenderer->damageBox(WLRBOXNEW.x - BORDERSIZE, WLRBOXNEW.y - BORDERSIZE, WLRBOXNEW.width + 2 * BORDERSIZE, BORDERSIZE + ROUNDINGSIZE);  // top
                 g_pHyprRenderer->damageBox(WLRBOXNEW.x - BORDERSIZE, WLRBOXNEW.y - BORDERSIZE, BORDERSIZE + ROUNDINGSIZE, WLRBOXNEW.height + 2 * BORDERSIZE); // left
                 g_pHyprRenderer->damageBox(WLRBOXNEW.x + WLRBOXNEW.width - ROUNDINGSIZE, WLRBOXNEW.y - BORDERSIZE, BORDERSIZE + ROUNDINGSIZE,
@@ -323,23 +320,23 @@ bool CAnimationManager::bezierExists(const std::string& bezier) {
 //
 
 void CAnimationManager::animationPopin(CWindow* pWindow, bool close, float minPerc) {
-    const auto GOALPOS  = pWindow->m_vRealPosition.goalv();
-    const auto GOALSIZE = pWindow->m_vRealSize.goalv();
+    const auto GOALPOS  = pWindow->m_vRealPosition.goal();
+    const auto GOALSIZE = pWindow->m_vRealSize.goal();
 
     if (!close) {
         pWindow->m_vRealSize.setValue((GOALSIZE * minPerc).clamp({5, 5}, {GOALSIZE.x, GOALSIZE.y}));
-        pWindow->m_vRealPosition.setValue(GOALPOS + GOALSIZE / 2.f - pWindow->m_vRealSize.m_vValue / 2.f);
+        pWindow->m_vRealPosition.setValue(GOALPOS + GOALSIZE / 2.f - pWindow->m_vRealSize.m_Value / 2.f);
     } else {
         pWindow->m_vRealSize     = (GOALSIZE * minPerc).clamp({5, 5}, {GOALSIZE.x, GOALSIZE.y});
-        pWindow->m_vRealPosition = GOALPOS + GOALSIZE / 2.f - pWindow->m_vRealSize.m_vGoal / 2.f;
+        pWindow->m_vRealPosition = GOALPOS + GOALSIZE / 2.f - pWindow->m_vRealSize.m_Goal / 2.f;
     }
 }
 
 void CAnimationManager::animationSlide(CWindow* pWindow, std::string force, bool close) {
     pWindow->m_vRealSize.warp(false); // size we preserve in slide
 
-    const auto GOALPOS  = pWindow->m_vRealPosition.goalv();
-    const auto GOALSIZE = pWindow->m_vRealSize.goalv();
+    const auto GOALPOS  = pWindow->m_vRealPosition.goal();
+    const auto GOALSIZE = pWindow->m_vRealSize.goal();
 
     const auto PMONITOR = g_pCompositor->getMonitorFromID(pWindow->m_iMonitorID);
 
@@ -512,6 +509,27 @@ std::string CAnimationManager::styleValidInConfigVar(const std::string& config, 
     } else if (config == "borderangle") {
         if (style == "loop" || style == "once")
             return "";
+        return "unknown style";
+    } else if (config.starts_with("layers")) {
+        if (style == "fade" || style == "" || style == "slide")
+            return "";
+        else if (style.starts_with("popin")) {
+            // try parsing
+            float minPerc = 0.f;
+            if (style.find("%") != std::string::npos) {
+                try {
+                    auto percstr = style.substr(style.find_last_of(' '));
+                    minPerc      = std::stoi(percstr.substr(0, percstr.length() - 1));
+                } catch (std::exception& e) { return "invalid minperc"; }
+
+                return "";
+            }
+
+            minPerc; // fix warning
+
+            return "";
+        }
+        return "";
         return "unknown style";
     } else {
         return "animation has no styles";

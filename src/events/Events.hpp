@@ -22,25 +22,6 @@ namespace Events {
     DYNLISTENFUNC(unmapLayerSurface);
     DYNLISTENFUNC(commitLayerSurface);
 
-    // Subsurfaces
-    DYNLISTENFUNC(newSubsurfaceNode);
-    DYNLISTENFUNC(destroySubsurfaceNode);
-    DYNLISTENFUNC(mapSubsurface);
-    DYNLISTENFUNC(unmapSubsurface);
-    DYNLISTENFUNC(destroySubsurface);
-    DYNLISTENFUNC(commitSubsurface);
-
-    // Popups
-    DYNLISTENFUNC(newPopup); // LayerSurface
-
-    DYNLISTENFUNC(newPopupXDG);
-    DYNLISTENFUNC(mapPopupXDG);
-    DYNLISTENFUNC(unmapPopupXDG);
-    DYNLISTENFUNC(destroyPopupXDG);
-    DYNLISTENFUNC(commitPopupXDG);
-    DYNLISTENFUNC(newPopupFromPopupXDG);
-    DYNLISTENFUNC(repositionPopupXDG);
-
     // Surface XDG (window)
     LISTENER(newXDGToplevel);
     LISTENER(activateXDG);
@@ -84,10 +65,7 @@ namespace Events {
     DYNLISTENFUNC(keyboardMod);
     DYNLISTENFUNC(keyboardDestroy);
 
-    DYNLISTENFUNC(commitConstraint);
     LISTENER(newConstraint);
-    DYNLISTENFUNC(setConstraintRegion);
-    DYNLISTENFUNC(destroyConstraint);
 
     // Various
     LISTENER(requestMouse);

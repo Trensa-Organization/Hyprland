@@ -302,140 +302,142 @@ CConfigManager::CConfigManager() {
     m_pConfig = std::make_unique<Hyprlang::CConfig>(configPaths.begin()->c_str(), Hyprlang::SConfigOptions{.throwAllErrors = true, .allowMissingConfig = true});
 
     m_pConfig->addConfigValue("general:sensitivity", {1.0f});
-    m_pConfig->addConfigValue("general:apply_sens_to_raw", {0L});
-    m_pConfig->addConfigValue("general:border_size", {1L});
-    m_pConfig->addConfigValue("general:no_border_on_floating", {0L});
-    m_pConfig->addConfigValue("general:border_part_of_window", {1L});
+    m_pConfig->addConfigValue("general:apply_sens_to_raw", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:border_size", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("general:no_border_on_floating", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:border_part_of_window", Hyprlang::INT{1});
     m_pConfig->addConfigValue("general:gaps_in", Hyprlang::CConfigCustomValueType{configHandleGapSet, configHandleGapDestroy, "5"});
     m_pConfig->addConfigValue("general:gaps_out", Hyprlang::CConfigCustomValueType{configHandleGapSet, configHandleGapDestroy, "20"});
-    m_pConfig->addConfigValue("general:gaps_workspaces", {0L});
-    m_pConfig->addConfigValue("general:cursor_inactive_timeout", {0L});
-    m_pConfig->addConfigValue("general:no_cursor_warps", {0L});
-    m_pConfig->addConfigValue("general:no_focus_fallback", {0L});
-    m_pConfig->addConfigValue("general:resize_on_border", {0L});
-    m_pConfig->addConfigValue("general:extend_border_grab_area", {15L});
-    m_pConfig->addConfigValue("general:hover_icon_on_border", {1L});
+    m_pConfig->addConfigValue("general:gaps_workspaces", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:cursor_inactive_timeout", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:no_cursor_warps", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:no_focus_fallback", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:resize_on_border", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:extend_border_grab_area", Hyprlang::INT{15});
+    m_pConfig->addConfigValue("general:hover_icon_on_border", Hyprlang::INT{1});
     m_pConfig->addConfigValue("general:layout", {"dwindle"});
-    m_pConfig->addConfigValue("general:allow_tearing", {0L});
+    m_pConfig->addConfigValue("general:allow_tearing", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("general:resize_corner", Hyprlang::INT{0});
 
-    m_pConfig->addConfigValue("misc:disable_hyprland_logo", {0L});
-    m_pConfig->addConfigValue("misc:disable_splash_rendering", {0L});
-    m_pConfig->addConfigValue("misc:col.splash", {0x55ffffffL});
+    m_pConfig->addConfigValue("misc:disable_hyprland_logo", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:disable_splash_rendering", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:col.splash", Hyprlang::INT{0x55ffffff});
     m_pConfig->addConfigValue("misc:splash_font_family", {"Sans"});
-    m_pConfig->addConfigValue("misc:force_default_wallpaper", {-1L});
-    m_pConfig->addConfigValue("misc:vfr", {1L});
-    m_pConfig->addConfigValue("misc:vrr", {0L});
-    m_pConfig->addConfigValue("misc:mouse_move_enables_dpms", {0L});
-    m_pConfig->addConfigValue("misc:key_press_enables_dpms", {0L});
-    m_pConfig->addConfigValue("misc:always_follow_on_dnd", {1L});
-    m_pConfig->addConfigValue("misc:layers_hog_keyboard_focus", {1L});
-    m_pConfig->addConfigValue("misc:animate_manual_resizes", {0L});
-    m_pConfig->addConfigValue("misc:animate_mouse_windowdragging", {0L});
-    m_pConfig->addConfigValue("misc:disable_autoreload", {0L});
-    m_pConfig->addConfigValue("misc:enable_swallow", {0L});
+    m_pConfig->addConfigValue("misc:force_default_wallpaper", Hyprlang::INT{-1});
+    m_pConfig->addConfigValue("misc:vfr", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:vrr", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:mouse_move_enables_dpms", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:key_press_enables_dpms", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:always_follow_on_dnd", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:layers_hog_keyboard_focus", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:animate_manual_resizes", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:animate_mouse_windowdragging", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:disable_autoreload", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:enable_swallow", Hyprlang::INT{0});
     m_pConfig->addConfigValue("misc:swallow_regex", {STRVAL_EMPTY});
     m_pConfig->addConfigValue("misc:swallow_exception_regex", {STRVAL_EMPTY});
-    m_pConfig->addConfigValue("misc:focus_on_activate", {0L});
-    m_pConfig->addConfigValue("misc:no_direct_scanout", {1L});
-    m_pConfig->addConfigValue("misc:hide_cursor_on_touch", {1L});
-    m_pConfig->addConfigValue("misc:mouse_move_focuses_monitor", {1L});
-    m_pConfig->addConfigValue("misc:render_ahead_of_time", {0L});
-    m_pConfig->addConfigValue("misc:render_ahead_safezone", {1L});
+    m_pConfig->addConfigValue("misc:focus_on_activate", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:no_direct_scanout", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:hide_cursor_on_touch", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:mouse_move_focuses_monitor", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:render_ahead_of_time", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:render_ahead_safezone", Hyprlang::INT{1});
     m_pConfig->addConfigValue("misc:cursor_zoom_factor", {1.f});
-    m_pConfig->addConfigValue("misc:cursor_zoom_rigid", {0L});
-    m_pConfig->addConfigValue("misc:allow_session_lock_restore", {0L});
-    m_pConfig->addConfigValue("misc:close_special_on_empty", {1L});
-    m_pConfig->addConfigValue("misc:background_color", {0xff111111L});
-    m_pConfig->addConfigValue("misc:new_window_takes_over_fullscreen", {0L});
+    m_pConfig->addConfigValue("misc:cursor_zoom_rigid", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:allow_session_lock_restore", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:close_special_on_empty", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("misc:background_color", Hyprlang::INT{0xff111111});
+    m_pConfig->addConfigValue("misc:new_window_takes_over_fullscreen", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("misc:enable_hyprcursor", Hyprlang::INT{1});
 
-    m_pConfig->addConfigValue("group:insert_after_current", {1L});
-    m_pConfig->addConfigValue("group:focus_removed_window", {1L});
-    m_pConfig->addConfigValue("group:groupbar:enabled", {1L});
+    m_pConfig->addConfigValue("group:insert_after_current", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("group:focus_removed_window", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("group:groupbar:enabled", Hyprlang::INT{1});
     m_pConfig->addConfigValue("group:groupbar:font_family", {"Sans"});
-    m_pConfig->addConfigValue("group:groupbar:font_size", {8L});
-    m_pConfig->addConfigValue("group:groupbar:gradients", {1L});
-    m_pConfig->addConfigValue("group:groupbar:height", {14L});
-    m_pConfig->addConfigValue("group:groupbar:priority", {3L});
-    m_pConfig->addConfigValue("group:groupbar:render_titles", {1L});
-    m_pConfig->addConfigValue("group:groupbar:scrolling", {1L});
-    m_pConfig->addConfigValue("group:groupbar:text_color", {0xffffffffL});
+    m_pConfig->addConfigValue("group:groupbar:font_size", Hyprlang::INT{8});
+    m_pConfig->addConfigValue("group:groupbar:gradients", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("group:groupbar:height", Hyprlang::INT{14});
+    m_pConfig->addConfigValue("group:groupbar:priority", Hyprlang::INT{3});
+    m_pConfig->addConfigValue("group:groupbar:render_titles", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("group:groupbar:scrolling", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("group:groupbar:text_color", Hyprlang::INT{0xffffffff});
 
-    m_pConfig->addConfigValue("debug:int", {0L});
-    m_pConfig->addConfigValue("debug:log_damage", {0L});
-    m_pConfig->addConfigValue("debug:overlay", {0L});
-    m_pConfig->addConfigValue("debug:damage_blink", {0L});
-    m_pConfig->addConfigValue("debug:disable_logs", {1L});
-    m_pConfig->addConfigValue("debug:disable_time", {1L});
-    m_pConfig->addConfigValue("debug:enable_stdout_logs", {0L});
+    m_pConfig->addConfigValue("debug:int", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("debug:log_damage", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("debug:overlay", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("debug:damage_blink", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("debug:disable_logs", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("debug:disable_time", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("debug:enable_stdout_logs", Hyprlang::INT{0});
     m_pConfig->addConfigValue("debug:damage_tracking", {(Hyprlang::INT)DAMAGE_TRACKING_FULL});
-    m_pConfig->addConfigValue("debug:manual_crash", {0L});
-    m_pConfig->addConfigValue("debug:suppress_errors", {0L});
-    m_pConfig->addConfigValue("debug:watchdog_timeout", {5L});
-    m_pConfig->addConfigValue("debug:disable_scale_checks", {0L});
+    m_pConfig->addConfigValue("debug:manual_crash", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("debug:suppress_errors", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("debug:watchdog_timeout", Hyprlang::INT{5});
+    m_pConfig->addConfigValue("debug:disable_scale_checks", Hyprlang::INT{0});
 
-    m_pConfig->addConfigValue("decoration:rounding", {0L});
-    m_pConfig->addConfigValue("decoration:blur:enabled", {1L});
-    m_pConfig->addConfigValue("decoration:blur:size", {8L});
-    m_pConfig->addConfigValue("decoration:blur:passes", {1L});
-    m_pConfig->addConfigValue("decoration:blur:ignore_opacity", {0L});
-    m_pConfig->addConfigValue("decoration:blur:new_optimizations", {1L});
-    m_pConfig->addConfigValue("decoration:blur:xray", {0L});
+    m_pConfig->addConfigValue("decoration:rounding", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("decoration:blur:enabled", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("decoration:blur:size", Hyprlang::INT{8});
+    m_pConfig->addConfigValue("decoration:blur:passes", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("decoration:blur:ignore_opacity", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("decoration:blur:new_optimizations", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("decoration:blur:xray", Hyprlang::INT{0});
     m_pConfig->addConfigValue("decoration:blur:contrast", {0.8916F});
     m_pConfig->addConfigValue("decoration:blur:brightness", {1.0F});
     m_pConfig->addConfigValue("decoration:blur:vibrancy", {0.1696F});
     m_pConfig->addConfigValue("decoration:blur:vibrancy_darkness", {0.0F});
     m_pConfig->addConfigValue("decoration:blur:noise", {0.0117F});
-    m_pConfig->addConfigValue("decoration:blur:special", {0L});
-    m_pConfig->addConfigValue("decoration:blur:popups", {0L});
+    m_pConfig->addConfigValue("decoration:blur:special", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("decoration:blur:popups", Hyprlang::INT{0});
     m_pConfig->addConfigValue("decoration:blur:popups_ignorealpha", {0.2F});
     m_pConfig->addConfigValue("decoration:active_opacity", {1.F});
     m_pConfig->addConfigValue("decoration:inactive_opacity", {1.F});
     m_pConfig->addConfigValue("decoration:fullscreen_opacity", {1.F});
-    m_pConfig->addConfigValue("decoration:no_blur_on_oversized", {0L});
-    m_pConfig->addConfigValue("decoration:drop_shadow", {1L});
-    m_pConfig->addConfigValue("decoration:shadow_range", {4L});
-    m_pConfig->addConfigValue("decoration:shadow_render_power", {3L});
-    m_pConfig->addConfigValue("decoration:shadow_ignore_window", {1L});
+    m_pConfig->addConfigValue("decoration:no_blur_on_oversized", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("decoration:drop_shadow", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("decoration:shadow_range", Hyprlang::INT{4});
+    m_pConfig->addConfigValue("decoration:shadow_render_power", Hyprlang::INT{3});
+    m_pConfig->addConfigValue("decoration:shadow_ignore_window", Hyprlang::INT{1});
     m_pConfig->addConfigValue("decoration:shadow_offset", Hyprlang::VEC2{0, 0});
     m_pConfig->addConfigValue("decoration:shadow_scale", {1.f});
-    m_pConfig->addConfigValue("decoration:col.shadow", {0xee1a1a1aL});
+    m_pConfig->addConfigValue("decoration:col.shadow", Hyprlang::INT{0xee1a1a1a});
     m_pConfig->addConfigValue("decoration:col.shadow_inactive", {(Hyprlang::INT)INT_MAX});
-    m_pConfig->addConfigValue("decoration:dim_inactive", {0L});
+    m_pConfig->addConfigValue("decoration:dim_inactive", Hyprlang::INT{0});
     m_pConfig->addConfigValue("decoration:dim_strength", {0.5f});
     m_pConfig->addConfigValue("decoration:dim_special", {0.2f});
     m_pConfig->addConfigValue("decoration:dim_around", {0.4f});
     m_pConfig->addConfigValue("decoration:screen_shader", {STRVAL_EMPTY});
 
-    m_pConfig->addConfigValue("dwindle:pseudotile", {0L});
-    m_pConfig->addConfigValue("dwindle:force_split", {0L});
-    m_pConfig->addConfigValue("dwindle:permanent_direction_override", {0L});
-    m_pConfig->addConfigValue("dwindle:preserve_split", {0L});
+    m_pConfig->addConfigValue("dwindle:pseudotile", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("dwindle:force_split", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("dwindle:permanent_direction_override", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("dwindle:preserve_split", Hyprlang::INT{0});
     m_pConfig->addConfigValue("dwindle:special_scale_factor", {1.f});
     m_pConfig->addConfigValue("dwindle:split_width_multiplier", {1.0f});
-    m_pConfig->addConfigValue("dwindle:no_gaps_when_only", {0L});
-    m_pConfig->addConfigValue("dwindle:use_active_for_splits", {1L});
+    m_pConfig->addConfigValue("dwindle:no_gaps_when_only", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("dwindle:use_active_for_splits", Hyprlang::INT{1});
     m_pConfig->addConfigValue("dwindle:default_split_ratio", {1.f});
-    m_pConfig->addConfigValue("dwindle:smart_split", {0L});
-    m_pConfig->addConfigValue("dwindle:smart_resizing", {1L});
+    m_pConfig->addConfigValue("dwindle:smart_split", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("dwindle:smart_resizing", Hyprlang::INT{1});
 
     m_pConfig->addConfigValue("master:special_scale_factor", {1.f});
     m_pConfig->addConfigValue("master:mfact", {0.55f});
-    m_pConfig->addConfigValue("master:new_is_master", {1L});
-    m_pConfig->addConfigValue("master:always_center_master", {0L});
-    m_pConfig->addConfigValue("master:new_on_top", {0L});
-    m_pConfig->addConfigValue("master:no_gaps_when_only", {0L});
+    m_pConfig->addConfigValue("master:new_is_master", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("master:always_center_master", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("master:new_on_top", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("master:no_gaps_when_only", Hyprlang::INT{0});
     m_pConfig->addConfigValue("master:orientation", {"left"});
-    m_pConfig->addConfigValue("master:inherit_fullscreen", {1L});
-    m_pConfig->addConfigValue("master:allow_small_split", {0L});
-    m_pConfig->addConfigValue("master:smart_resizing", {1L});
-    m_pConfig->addConfigValue("master:drop_at_cursor", {1L});
+    m_pConfig->addConfigValue("master:inherit_fullscreen", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("master:allow_small_split", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("master:smart_resizing", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("master:drop_at_cursor", Hyprlang::INT{1});
 
-    m_pConfig->addConfigValue("animations:enabled", {1L});
-    m_pConfig->addConfigValue("animations:first_launch_animation", {1L});
+    m_pConfig->addConfigValue("animations:enabled", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("animations:first_launch_animation", Hyprlang::INT{1});
 
-    m_pConfig->addConfigValue("input:follow_mouse", {1L});
-    m_pConfig->addConfigValue("input:mouse_refocus", {1L});
-    m_pConfig->addConfigValue("input:special_fallthrough", {0L});
+    m_pConfig->addConfigValue("input:follow_mouse", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:mouse_refocus", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:special_fallthrough", Hyprlang::INT{0});
     m_pConfig->addConfigValue("input:sensitivity", {0.f});
     m_pConfig->addConfigValue("input:accel_profile", {STRVAL_EMPTY});
     m_pConfig->addConfigValue("input:kb_file", {STRVAL_EMPTY});
@@ -444,65 +446,66 @@ CConfigManager::CConfigManager() {
     m_pConfig->addConfigValue("input:kb_options", {STRVAL_EMPTY});
     m_pConfig->addConfigValue("input:kb_rules", {STRVAL_EMPTY});
     m_pConfig->addConfigValue("input:kb_model", {STRVAL_EMPTY});
-    m_pConfig->addConfigValue("input:repeat_rate", {25L});
-    m_pConfig->addConfigValue("input:repeat_delay", {600L});
-    m_pConfig->addConfigValue("input:natural_scroll", {0L});
-    m_pConfig->addConfigValue("input:numlock_by_default", {0L});
-    m_pConfig->addConfigValue("input:resolve_binds_by_sym", {0L});
-    m_pConfig->addConfigValue("input:force_no_accel", {0L});
-    m_pConfig->addConfigValue("input:float_switch_override_focus", {1L});
-    m_pConfig->addConfigValue("input:left_handed", {0L});
+    m_pConfig->addConfigValue("input:repeat_rate", Hyprlang::INT{25});
+    m_pConfig->addConfigValue("input:repeat_delay", Hyprlang::INT{600});
+    m_pConfig->addConfigValue("input:natural_scroll", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:numlock_by_default", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:resolve_binds_by_sym", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:force_no_accel", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:float_switch_override_focus", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:left_handed", Hyprlang::INT{0});
     m_pConfig->addConfigValue("input:scroll_method", {STRVAL_EMPTY});
-    m_pConfig->addConfigValue("input:scroll_button", {0L});
-    m_pConfig->addConfigValue("input:scroll_button_lock", {0L});
+    m_pConfig->addConfigValue("input:scroll_button", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:scroll_button_lock", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:scroll_factor", {1.f});
     m_pConfig->addConfigValue("input:scroll_points", {STRVAL_EMPTY});
-    m_pConfig->addConfigValue("input:touchpad:natural_scroll", {0L});
-    m_pConfig->addConfigValue("input:touchpad:disable_while_typing", {1L});
-    m_pConfig->addConfigValue("input:touchpad:clickfinger_behavior", {0L});
+    m_pConfig->addConfigValue("input:touchpad:natural_scroll", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:touchpad:disable_while_typing", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:touchpad:clickfinger_behavior", Hyprlang::INT{0});
     m_pConfig->addConfigValue("input:touchpad:tap_button_map", {STRVAL_EMPTY});
-    m_pConfig->addConfigValue("input:touchpad:middle_button_emulation", {0L});
-    m_pConfig->addConfigValue("input:touchpad:tap-to-click", {1L});
-    m_pConfig->addConfigValue("input:touchpad:tap-and-drag", {1L});
-    m_pConfig->addConfigValue("input:touchpad:drag_lock", {0L});
+    m_pConfig->addConfigValue("input:touchpad:middle_button_emulation", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("input:touchpad:tap-to-click", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:touchpad:tap-and-drag", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:touchpad:drag_lock", Hyprlang::INT{0});
     m_pConfig->addConfigValue("input:touchpad:scroll_factor", {1.f});
-    m_pConfig->addConfigValue("input:touchdevice:transform", {0L});
+    m_pConfig->addConfigValue("input:touchdevice:transform", Hyprlang::INT{0});
     m_pConfig->addConfigValue("input:touchdevice:output", {"[[Auto]]"});
-    m_pConfig->addConfigValue("input:touchdevice:enabled", {1L});
-    m_pConfig->addConfigValue("input:tablet:transform", {0L});
+    m_pConfig->addConfigValue("input:touchdevice:enabled", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("input:tablet:transform", Hyprlang::INT{0});
     m_pConfig->addConfigValue("input:tablet:output", {STRVAL_EMPTY});
     m_pConfig->addConfigValue("input:tablet:region_position", Hyprlang::VEC2{0, 0});
     m_pConfig->addConfigValue("input:tablet:region_size", Hyprlang::VEC2{0, 0});
-    m_pConfig->addConfigValue("input:tablet:relative_input", {0L});
+    m_pConfig->addConfigValue("input:tablet:relative_input", Hyprlang::INT{0});
 
-    m_pConfig->addConfigValue("binds:pass_mouse_when_bound", {0L});
-    m_pConfig->addConfigValue("binds:scroll_event_delay", {300L});
-    m_pConfig->addConfigValue("binds:workspace_back_and_forth", {0L});
-    m_pConfig->addConfigValue("binds:allow_workspace_cycles", {0L});
-    m_pConfig->addConfigValue("binds:workspace_center_on", {1L});
-    m_pConfig->addConfigValue("binds:focus_preferred_method", {0L});
-    m_pConfig->addConfigValue("binds:ignore_group_lock", {0L});
-    m_pConfig->addConfigValue("binds:movefocus_cycles_fullscreen", {1L});
+    m_pConfig->addConfigValue("binds:pass_mouse_when_bound", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("binds:scroll_event_delay", Hyprlang::INT{300});
+    m_pConfig->addConfigValue("binds:workspace_back_and_forth", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("binds:allow_workspace_cycles", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("binds:workspace_center_on", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("binds:focus_preferred_method", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("binds:ignore_group_lock", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("binds:movefocus_cycles_fullscreen", Hyprlang::INT{1});
 
-    m_pConfig->addConfigValue("gestures:workspace_swipe", {0L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_fingers", {3L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_distance", {300L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_invert", {1L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_min_speed_to_force", {30L});
+    m_pConfig->addConfigValue("gestures:workspace_swipe", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_fingers", Hyprlang::INT{3});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_distance", Hyprlang::INT{300});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_invert", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_min_speed_to_force", Hyprlang::INT{30});
     m_pConfig->addConfigValue("gestures:workspace_swipe_cancel_ratio", {0.5f});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_create_new", {1L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_direction_lock", {1L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_direction_lock_threshold", {10L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_forever", {0L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_numbered", {0L});
-    m_pConfig->addConfigValue("gestures:workspace_swipe_use_r", {0L});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_create_new", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_direction_lock", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_direction_lock_threshold", Hyprlang::INT{10});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_forever", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_numbered", Hyprlang::INT{0});
+    m_pConfig->addConfigValue("gestures:workspace_swipe_use_r", Hyprlang::INT{0});
 
-    m_pConfig->addConfigValue("xwayland:use_nearest_neighbor", {1L});
-    m_pConfig->addConfigValue("xwayland:force_zero_scaling", {0L});
+    m_pConfig->addConfigValue("xwayland:use_nearest_neighbor", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("xwayland:force_zero_scaling", Hyprlang::INT{0});
 
-    m_pConfig->addConfigValue("opengl:nvidia_anti_flicker", {1L});
-    m_pConfig->addConfigValue("opengl:force_introspection", {2L});
+    m_pConfig->addConfigValue("opengl:nvidia_anti_flicker", Hyprlang::INT{1});
+    m_pConfig->addConfigValue("opengl:force_introspection", Hyprlang::INT{2});
 
-    m_pConfig->addConfigValue("autogenerated", {0L});
+    m_pConfig->addConfigValue("autogenerated", Hyprlang::INT{0});
 
     m_pConfig->addConfigValue("general:col.active_border", Hyprlang::CConfigCustomValueType{&configHandleGradientSet, configHandleGradientDestroy, "0xffffffff"});
     m_pConfig->addConfigValue("general:col.inactive_border", Hyprlang::CConfigCustomValueType{&configHandleGradientSet, configHandleGradientDestroy, "0xff444444"});
@@ -529,29 +532,29 @@ CConfigManager::CConfigManager() {
     m_pConfig->addSpecialConfigValue("device", "kb_options", {STRVAL_EMPTY});
     m_pConfig->addSpecialConfigValue("device", "kb_rules", {STRVAL_EMPTY});
     m_pConfig->addSpecialConfigValue("device", "kb_model", {STRVAL_EMPTY});
-    m_pConfig->addSpecialConfigValue("device", "repeat_rate", {25L});
-    m_pConfig->addSpecialConfigValue("device", "repeat_delay", {600L});
-    m_pConfig->addSpecialConfigValue("device", "natural_scroll", {0L});
+    m_pConfig->addSpecialConfigValue("device", "repeat_rate", Hyprlang::INT{25});
+    m_pConfig->addSpecialConfigValue("device", "repeat_delay", Hyprlang::INT{600});
+    m_pConfig->addSpecialConfigValue("device", "natural_scroll", Hyprlang::INT{0});
     m_pConfig->addSpecialConfigValue("device", "tap_button_map", {STRVAL_EMPTY});
-    m_pConfig->addSpecialConfigValue("device", "numlock_by_default", {0L});
-    m_pConfig->addSpecialConfigValue("device", "resolve_binds_by_sym", {0L});
-    m_pConfig->addSpecialConfigValue("device", "disable_while_typing", {1L});
-    m_pConfig->addSpecialConfigValue("device", "clickfinger_behavior", {0L});
-    m_pConfig->addSpecialConfigValue("device", "middle_button_emulation", {0L});
-    m_pConfig->addSpecialConfigValue("device", "tap-to-click", {1L});
-    m_pConfig->addSpecialConfigValue("device", "tap-and-drag", {1L});
-    m_pConfig->addSpecialConfigValue("device", "drag_lock", {0L});
-    m_pConfig->addSpecialConfigValue("device", "left_handed", {0L});
+    m_pConfig->addSpecialConfigValue("device", "numlock_by_default", Hyprlang::INT{0});
+    m_pConfig->addSpecialConfigValue("device", "resolve_binds_by_sym", Hyprlang::INT{0});
+    m_pConfig->addSpecialConfigValue("device", "disable_while_typing", Hyprlang::INT{1});
+    m_pConfig->addSpecialConfigValue("device", "clickfinger_behavior", Hyprlang::INT{0});
+    m_pConfig->addSpecialConfigValue("device", "middle_button_emulation", Hyprlang::INT{0});
+    m_pConfig->addSpecialConfigValue("device", "tap-to-click", Hyprlang::INT{1});
+    m_pConfig->addSpecialConfigValue("device", "tap-and-drag", Hyprlang::INT{1});
+    m_pConfig->addSpecialConfigValue("device", "drag_lock", Hyprlang::INT{0});
+    m_pConfig->addSpecialConfigValue("device", "left_handed", Hyprlang::INT{0});
     m_pConfig->addSpecialConfigValue("device", "scroll_method", {STRVAL_EMPTY});
-    m_pConfig->addSpecialConfigValue("device", "scroll_button", {0L});
-    m_pConfig->addSpecialConfigValue("device", "scroll_button_lock", {0L});
+    m_pConfig->addSpecialConfigValue("device", "scroll_button", Hyprlang::INT{0});
+    m_pConfig->addSpecialConfigValue("device", "scroll_button_lock", Hyprlang::INT{0});
     m_pConfig->addSpecialConfigValue("device", "scroll_points", {STRVAL_EMPTY});
-    m_pConfig->addSpecialConfigValue("device", "transform", {0L});
+    m_pConfig->addSpecialConfigValue("device", "transform", Hyprlang::INT{0});
     m_pConfig->addSpecialConfigValue("device", "output", {STRVAL_EMPTY});
-    m_pConfig->addSpecialConfigValue("device", "enabled", {1L});                         // only for mice, touchpads, and touchdevices
+    m_pConfig->addSpecialConfigValue("device", "enabled", Hyprlang::INT{1});             // only for mice, touchpads, and touchdevices
     m_pConfig->addSpecialConfigValue("device", "region_position", Hyprlang::VEC2{0, 0}); // only for tablets
     m_pConfig->addSpecialConfigValue("device", "region_size", Hyprlang::VEC2{0, 0});     // only for tablets
-    m_pConfig->addSpecialConfigValue("device", "relative_input", {0L});                  // only for tablets
+    m_pConfig->addSpecialConfigValue("device", "relative_input", Hyprlang::INT{0});      // only for tablets
 
     // keywords
     m_pConfig->registerHandler(&::handleRawExec, "exec", {false});
@@ -617,6 +620,7 @@ void CConfigManager::setDefaultAnimationVars() {
     if (isFirstLaunch) {
         INITANIMCFG("global");
         INITANIMCFG("windows");
+        INITANIMCFG("layers");
         INITANIMCFG("fade");
         INITANIMCFG("border");
         INITANIMCFG("borderangle");
@@ -644,6 +648,7 @@ void CConfigManager::setDefaultAnimationVars() {
     animationConfig["global"] = {false, "default", "", 8.f, 1, &animationConfig["general"], nullptr};
 
     CREATEANIMCFG("windows", "global");
+    CREATEANIMCFG("layers", "global");
     CREATEANIMCFG("fade", "global");
     CREATEANIMCFG("border", "global");
     CREATEANIMCFG("borderangle", "global");
@@ -658,6 +663,7 @@ void CConfigManager::setDefaultAnimationVars() {
     CREATEANIMCFG("fadeSwitch", "fade");
     CREATEANIMCFG("fadeShadow", "fade");
     CREATEANIMCFG("fadeDim", "fade");
+    CREATEANIMCFG("fadeLayers", "fade");
 
     CREATEANIMCFG("specialWorkspace", "workspaces");
 }
@@ -942,8 +948,8 @@ SWorkspaceRule CConfigManager::getWorkspaceRuleFor(CWorkspace* pWorkspace) {
     return *IT;
 }
 
-std::vector<SWindowRule> CConfigManager::getMatchingRules(CWindow* pWindow, bool dynamic) {
-    if (!g_pCompositor->windowValidMapped(pWindow))
+std::vector<SWindowRule> CConfigManager::getMatchingRules(CWindow* pWindow, bool dynamic, bool shadowExec) {
+    if (!g_pCompositor->windowExists(pWindow))
         return std::vector<SWindowRule>();
 
     std::vector<SWindowRule> returns;
@@ -1090,7 +1096,7 @@ std::vector<SWindowRule> CConfigManager::getMatchingRules(CWindow* pWindow, bool
         }
     }
 
-    if (anyExecFound) // remove exec rules to unclog searches in the future, why have the garbage here.
+    if (anyExecFound && !shadowExec) // remove exec rules to unclog searches in the future, why have the garbage here.
         execRequestedRules.erase(std::remove_if(execRequestedRules.begin(), execRequestedRules.end(),
                                                 [&](const SExecRequestedRule& other) { return std::ranges::any_of(PIDs, [&](const auto& pid) { return pid == other.iPid; }); }));
 
@@ -1228,9 +1234,9 @@ void CConfigManager::ensureMonitorStatus() {
 }
 
 void CConfigManager::ensureVRR(CMonitor* pMonitor) {
-    static auto* const PVRR = reinterpret_cast<Hyprlang::INT* const*>(getConfigValuePtr("misc:vrr"));
+    static auto PVRR = reinterpret_cast<Hyprlang::INT* const*>(getConfigValuePtr("misc:vrr"));
 
-    static auto        ensureVRRForDisplay = [&](CMonitor* m) -> void {
+    static auto ensureVRRForDisplay = [&](CMonitor* m) -> void {
         if (!m->output || m->createdByUser)
             return;
 
@@ -1547,6 +1553,8 @@ std::optional<std::string> CConfigManager::handleMonitor(const std::string& comm
         return {};
     }
 
+    std::string error = "";
+
     if (ARGS[1].starts_with("pref")) {
         newrule.resolution = Vector2D();
     } else if (ARGS[1].starts_with("highrr")) {
@@ -1557,30 +1565,43 @@ std::optional<std::string> CConfigManager::handleMonitor(const std::string& comm
         newrule.resolution  = Vector2D(newrule.drmMode.hdisplay, newrule.drmMode.vdisplay);
         newrule.refreshRate = newrule.drmMode.vrefresh / 1000;
     } else {
-        newrule.resolution.x = stoi(ARGS[1].substr(0, ARGS[1].find_first_of('x')));
-        newrule.resolution.y = stoi(ARGS[1].substr(ARGS[1].find_first_of('x') + 1, ARGS[1].find_first_of('@')));
 
-        if (ARGS[1].contains("@"))
-            newrule.refreshRate = stof(ARGS[1].substr(ARGS[1].find_first_of('@') + 1));
+        if (!ARGS[1].contains("x")) {
+            error += "invalid resolution ";
+            newrule.resolution = Vector2D();
+        } else {
+            newrule.resolution.x = stoi(ARGS[1].substr(0, ARGS[1].find_first_of('x')));
+            newrule.resolution.y = stoi(ARGS[1].substr(ARGS[1].find_first_of('x') + 1, ARGS[1].find_first_of('@')));
+
+            if (ARGS[1].contains("@"))
+                newrule.refreshRate = stof(ARGS[1].substr(ARGS[1].find_first_of('@') + 1));
+        }
     }
 
     if (ARGS[2].starts_with("auto")) {
         newrule.offset = Vector2D(-INT32_MAX, -INT32_MAX);
     } else {
-        newrule.offset.x = stoi(ARGS[2].substr(0, ARGS[2].find_first_of('x')));
-        newrule.offset.y = stoi(ARGS[2].substr(ARGS[2].find_first_of('x') + 1));
+        if (!ARGS[2].contains("x")) {
+            error += "invalid offset ";
+            newrule.offset = Vector2D(-INT32_MAX, -INT32_MAX);
+        } else {
+            newrule.offset.x = stoi(ARGS[2].substr(0, ARGS[2].find_first_of('x')));
+            newrule.offset.y = stoi(ARGS[2].substr(ARGS[2].find_first_of('x') + 1));
+        }
     }
-
-    std::string error = "";
 
     if (ARGS[3].starts_with("auto")) {
         newrule.scale = -1;
     } else {
-        newrule.scale = stof(ARGS[3]);
+        if (!isNumber(ARGS[3], true))
+            error += "invalid scale ";
+        else {
+            newrule.scale = stof(ARGS[3]);
 
-        if (newrule.scale < 0.25f) {
-            error         = "invalid scale";
-            newrule.scale = 1;
+            if (newrule.scale < 0.25f) {
+                error += "invalid scale ";
+                newrule.scale = 1;
+            }
         }
     }
 
@@ -1594,9 +1615,29 @@ std::optional<std::string> CConfigManager::handleMonitor(const std::string& comm
             newrule.enable10bit = ARGS[argno + 1] == "10";
             argno++;
         } else if (ARGS[argno] == "transform") {
+            if (!isNumber(ARGS[argno + 1])) {
+                error = "invalid transform ";
+                argno++;
+                continue;
+            }
+
+            const auto NUM = std::stoi(ARGS[argno + 1]);
+
+            if (NUM < 0 || NUM > 7) {
+                error = "invalid transform ";
+                argno++;
+                continue;
+            }
+
             newrule.transform = (wl_output_transform)std::stoi(ARGS[argno + 1]);
             argno++;
         } else if (ARGS[argno] == "vrr") {
+            if (!isNumber(ARGS[argno + 1])) {
+                error = "invalid vrr ";
+                argno++;
+                continue;
+            }
+
             newrule.vrr = std::stoi(ARGS[argno + 1]);
             argno++;
         } else if (ARGS[argno] == "workspace") {
@@ -1729,6 +1770,17 @@ std::optional<std::string> CConfigManager::handleAnimation(const std::string& co
     return {};
 }
 
+SParsedKey parseKey(const std::string& key) {
+    if (isNumber(key) && std::stoi(key) > 9)
+        return {.keycode = std::stoi(key)};
+    else if (key.starts_with("code:") && isNumber(key.substr(5)))
+        return {.keycode = std::stoi(key.substr(5))};
+    else if (key == "catchall")
+        return {.catchAll = true};
+    else
+        return {.key = key};
+}
+
 std::optional<std::string> CConfigManager::handleBind(const std::string& command, const std::string& value) {
     // example:
     // bind[fl]=SUPER,G,exec,dmenu_run <args>
@@ -1804,14 +1856,15 @@ std::optional<std::string> CConfigManager::handleBind(const std::string& command
     }
 
     if (KEY != "") {
-        if (isNumber(KEY) && std::stoi(KEY) > 9)
-            g_pKeybindManager->addKeybind(
-                SKeybind{"", std::stoi(KEY), MOD, HANDLER, COMMAND, locked, m_szCurrentSubmap, release, repeat, mouse, nonConsuming, transparent, ignoreMods});
-        else if (KEY.starts_with("code:") && isNumber(KEY.substr(5)))
-            g_pKeybindManager->addKeybind(
-                SKeybind{"", std::stoi(KEY.substr(5)), MOD, HANDLER, COMMAND, locked, m_szCurrentSubmap, release, repeat, mouse, nonConsuming, transparent, ignoreMods});
-        else
-            g_pKeybindManager->addKeybind(SKeybind{KEY, 0, MOD, HANDLER, COMMAND, locked, m_szCurrentSubmap, release, repeat, mouse, nonConsuming, transparent, ignoreMods});
+        SParsedKey parsedKey = parseKey(KEY);
+
+        if (parsedKey.catchAll && m_szCurrentSubmap == "") {
+            Debug::log(ERR, "Catchall not allowed outside of submap!");
+            return "Invalid catchall, catchall keybinds are only allowed in submaps.";
+        }
+
+        g_pKeybindManager->addKeybind(SKeybind{parsedKey.key, parsedKey.keycode, parsedKey.catchAll, MOD, HANDLER, COMMAND, locked, m_szCurrentSubmap, release, repeat, mouse,
+                                               nonConsuming, transparent, ignoreMods});
     }
 
     return {};
@@ -1822,7 +1875,7 @@ std::optional<std::string> CConfigManager::handleUnbind(const std::string& comma
 
     const auto MOD = g_pKeybindManager->stringToModMask(ARGS[0]);
 
-    const auto KEY = ARGS[1];
+    const auto KEY = parseKey(ARGS[1]);
 
     g_pKeybindManager->removeKeybind(MOD, KEY);
 
@@ -1840,7 +1893,7 @@ bool windowRuleValid(const std::string& RULE) {
 }
 
 bool layerRuleValid(const std::string& RULE) {
-    return RULE == "noanim" || RULE == "blur" || RULE.starts_with("ignorealpha") || RULE.starts_with("ignorezero") || RULE.starts_with("xray");
+    return RULE == "noanim" || RULE == "blur" || RULE.starts_with("ignorealpha") || RULE.starts_with("ignorezero") || RULE.starts_with("xray") || RULE.starts_with("animation");
 }
 
 std::optional<std::string> CConfigManager::handleWindowRule(const std::string& command, const std::string& value) {
@@ -2226,6 +2279,8 @@ std::optional<std::string> CConfigManager::handleSource(const std::string& comma
         return err;
     }
 
+    std::string errorsFromParsing;
+
     for (size_t i = 0; i < glob_buf->gl_pathc; i++) {
         auto value = absolutePath(glob_buf->gl_pathv[i], configCurrentPath);
 
@@ -2251,12 +2306,17 @@ std::optional<std::string> CConfigManager::handleSource(const std::string& comma
         auto configCurrentPathBackup = configCurrentPath;
         configCurrentPath            = value;
 
-        m_pConfig->parseFile(value.c_str());
+        const auto THISRESULT = m_pConfig->parseFile(value.c_str());
 
         configCurrentPath = configCurrentPathBackup;
+
+        if (THISRESULT.error && errorsFromParsing.empty())
+            errorsFromParsing += THISRESULT.getError();
     }
 
-    return {};
+    if (errorsFromParsing.empty())
+        return {};
+    return errorsFromParsing;
 }
 
 std::optional<std::string> CConfigManager::handleEnv(const std::string& command, const std::string& value) {

@@ -1,7 +1,8 @@
 #include "Workspace.hpp"
 #include "../Compositor.hpp"
+#include "../config/ConfigValue.hpp"
 
-CWorkspace::CWorkspace(int monitorID, std::string name, bool special) {
+CWorkspace::CWorkspace(int id, int monitorID, std::string name, bool special) {
     const auto PMONITOR = g_pCompositor->getMonitorFromID(monitorID);
 
     if (!PMONITOR) {
@@ -10,12 +11,13 @@ CWorkspace::CWorkspace(int monitorID, std::string name, bool special) {
     }
 
     m_iMonitorID          = monitorID;
+    m_iID                 = id;
     m_szName              = name;
     m_bIsSpecialWorkspace = special;
 
     m_vRenderOffset.m_pWorkspace = this;
-    m_vRenderOffset.create(AVARTYPE_VECTOR, special ? g_pConfigManager->getAnimationPropertyConfig("specialWorkspace") : g_pConfigManager->getAnimationPropertyConfig("workspaces"),
-                           nullptr, AVARDAMAGE_ENTIRE);
+    m_vRenderOffset.create(special ? g_pConfigManager->getAnimationPropertyConfig("specialWorkspace") : g_pConfigManager->getAnimationPropertyConfig("workspaces"), nullptr,
+                           AVARDAMAGE_ENTIRE);
     m_fAlpha.m_pWorkspace = this;
     m_fAlpha.create(AVARTYPE_FLOAT, special ? g_pConfigManager->getAnimationPropertyConfig("specialWorkspace") : g_pConfigManager->getAnimationPropertyConfig("workspaces"),
                     nullptr, AVARDAMAGE_ENTIRE);
@@ -29,6 +31,7 @@ CWorkspace::CWorkspace(int monitorID, std::string name, bool special) {
         m_szName = RULEFORTHIS.defaultName.value();
 
     g_pEventManager->postEvent({"createworkspace", m_szName});
+    g_pEventManager->postEvent({"createworkspacev2", std::format("{},{}", m_iID, m_szName)});
     EMIT_HOOK_EVENT("createWorkspace", this);
 }
 
@@ -38,12 +41,13 @@ CWorkspace::~CWorkspace() {
     Debug::log(LOG, "Destroying workspace ID {}", m_iID);
 
     g_pEventManager->postEvent({"destroyworkspace", m_szName});
+    g_pEventManager->postEvent({"destroyworkspacev2", std::format("{},{}", m_iID, m_szName)});
     EMIT_HOOK_EVENT("destroyWorkspace", this);
 }
 
 void CWorkspace::startAnim(bool in, bool left, bool instant) {
-    const auto         ANIMSTYLE     = m_fAlpha.m_pConfig->pValues->internalStyle;
-    static auto* const PWORKSPACEGAP = (Hyprlang::INT* const*)g_pConfigManager->getConfigValuePtr("general:gaps_workspaces");
+    const auto  ANIMSTYLE     = m_fAlpha.m_pConfig->pValues->internalStyle;
+    static auto PWORKSPACEGAP = CConfigValue<Hyprlang::INT>("general:gaps_workspaces");
 
     if (ANIMSTYLE.starts_with("slidefade")) {
         const auto PMONITOR = g_pCompositor->getMonitorFromID(m_iMonitorID);
@@ -95,7 +99,7 @@ void CWorkspace::startAnim(bool in, bool left, bool instant) {
     } else if (ANIMSTYLE == "slidevert") {
         // fallback is slide
         const auto PMONITOR  = g_pCompositor->getMonitorFromID(m_iMonitorID);
-        const auto YDISTANCE = PMONITOR->vecSize.y + **PWORKSPACEGAP;
+        const auto YDISTANCE = PMONITOR->vecSize.y + *PWORKSPACEGAP;
 
         m_fAlpha.setValueAndWarp(1.f); // fix a bug, if switching from fade -> slide.
 
@@ -108,7 +112,7 @@ void CWorkspace::startAnim(bool in, bool left, bool instant) {
     } else {
         // fallback is slide
         const auto PMONITOR  = g_pCompositor->getMonitorFromID(m_iMonitorID);
-        const auto XDISTANCE = PMONITOR->vecSize.x + **PWORKSPACEGAP;
+        const auto XDISTANCE = PMONITOR->vecSize.x + *PWORKSPACEGAP;
 
         m_fAlpha.setValueAndWarp(1.f); // fix a bug, if switching from fade -> slide.
 

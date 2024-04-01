@@ -1,17 +1,25 @@
 #pragma once
 
 #include "../defines.hpp"
-#include "Region.hpp"
+#include "../helpers/Region.hpp"
+#include "Constraint.hpp"
 
 class CWindow;
+struct SLayerSurface;
+class CSubsurface;
+class CPopup;
 
 class CWLSurface {
   public:
     CWLSurface() = default;
-    CWLSurface(wlr_surface* pSurface);
     ~CWLSurface();
 
+    // anonymous surfaces are non-desktop components, e.g. a cursor surface or a DnD
     void assign(wlr_surface* pSurface);
+    void assign(wlr_surface* pSurface, CWindow* pOwner);
+    void assign(wlr_surface* pSurface, SLayerSurface* pOwner);
+    void assign(wlr_surface* pSurface, CSubsurface* pOwner);
+    void assign(wlr_surface* pSurface, CPopup* pOwner);
     void unassign();
 
     CWLSurface(const CWLSurface&)             = delete;
@@ -25,12 +33,21 @@ class CWLSurface {
     Vector2D     correctSmallVec() const; // returns a corrective vector for small() surfaces
     Vector2D     getViewporterCorrectedSize() const;
     CRegion      logicalDamage() const;
+    void         onCommit();
+
+    // getters for owners.
+    CWindow*       getWindow();
+    SLayerSurface* getLayer();
+    CPopup*        getPopup();
+    CSubsurface*   getSubsurface();
+
+    // desktop components misc utils
+    std::optional<CBox> getSurfaceBoxGlobal();
+    void                appendConstraint(wlr_pointer_constraint_v1* constraint);
+    CConstraint*        constraint();
 
     // allow stretching. Useful for plugins.
     bool m_bFillIgnoreSmall = false;
-
-    // if present, means this is a base surface of a window. Cleaned on unassign()
-    CWindow* m_pOwner = nullptr;
 
     // track surface data and avoid dupes
     float               m_fLastScale     = 0;
@@ -59,14 +76,30 @@ class CWLSurface {
     }
 
     static CWLSurface* surfaceFromWlr(wlr_surface* pSurface) {
+        if (!pSurface)
+            return nullptr;
         return (CWLSurface*)pSurface->data;
     }
 
   private:
-    wlr_surface* m_pWLRSurface = nullptr;
+    bool           m_bInert = true;
 
-    void         destroy();
-    void         init();
+    wlr_surface*   m_pWLRSurface = nullptr;
+
+    CWindow*       m_pWindowOwner     = nullptr;
+    SLayerSurface* m_pLayerOwner      = nullptr;
+    CPopup*        m_pPopupOwner      = nullptr;
+    CSubsurface*   m_pSubsurfaceOwner = nullptr;
+
+    //
+    std::unique_ptr<CConstraint> m_pConstraint;
+
+    void                         destroy();
+    void                         init();
+    bool                         desktopComponent();
 
     DYNLISTENER(destroy);
+    DYNLISTENER(commit);
+
+    friend class CConstraint;
 };
