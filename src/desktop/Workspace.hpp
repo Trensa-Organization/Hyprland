@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AnimatedVariable.hpp"
+#include "../helpers/AnimatedVariable.hpp"
 #include <string>
 #include "../defines.hpp"
 
@@ -14,7 +14,7 @@ class CWindow;
 
 class CWorkspace {
   public:
-    CWorkspace(int monitorID, std::string name, bool special = false);
+    CWorkspace(int id, int monitorID, std::string name, bool special = false);
     ~CWorkspace();
 
     // Workspaces ID-based have IDs > 0
@@ -35,9 +35,9 @@ class CWorkspace {
     wl_array        m_wlrCoordinateArr;
 
     // for animations
-    CAnimatedVariable m_vRenderOffset;
-    CAnimatedVariable m_fAlpha;
-    bool              m_bForceRendering = false;
+    CAnimatedVariable<Vector2D> m_vRenderOffset;
+    CAnimatedVariable<float>    m_fAlpha;
+    bool                        m_bForceRendering = false;
 
     // "scratchpad"
     bool m_bIsSpecialWorkspace = false;

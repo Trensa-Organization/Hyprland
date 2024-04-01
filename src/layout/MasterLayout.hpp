@@ -65,6 +65,7 @@ class CHyprMasterLayout : public IHyprLayout {
     virtual void                     alterSplitRatio(CWindow*, float, bool);
     virtual std::string              getLayoutName();
     virtual void                     replaceWindowDataWith(CWindow* from, CWindow* to);
+    virtual Vector2D                 predictSizeForNewWindow();
 
     virtual void                     onEnable();
     virtual void                     onDisable();
@@ -86,8 +87,6 @@ class CHyprMasterLayout : public IHyprLayout {
     void                              calculateWorkspace(const int&);
     CWindow*                          getNextWindow(CWindow*, bool);
     int                               getMastersOnWorkspace(const int&);
-    bool                              prepareLoseFocus(CWindow*);
-    void                              prepareNewFocus(CWindow*, bool inherit_fullscreen);
 
     friend struct SMasterNodeData;
     friend struct SMasterWorkspaceData;

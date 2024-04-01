@@ -1,13 +1,14 @@
 #pragma once
 
 #include "defines.hpp"
-#include "helpers/SubsurfaceTree.hpp"
+#include "desktop/Subsurface.hpp"
 #include "helpers/AnimatedVariable.hpp"
 #include "render/decorations/IHyprWindowDecoration.hpp"
 #include <deque>
 #include "config/ConfigDataValues.hpp"
 #include "helpers/Vector2D.hpp"
-#include "helpers/WLSurface.hpp"
+#include "desktop/WLSurface.hpp"
+#include "desktop/Popup.hpp"
 #include "macros.hpp"
 #include "managers/XWaylandManager.hpp"
 
@@ -141,26 +142,28 @@ struct SWindowSpecialRenderData {
 };
 
 struct SWindowAdditionalConfigData {
-    std::string                 animationStyle        = std::string("");
-    CWindowOverridableVar<int>  rounding              = -1; // -1 means no
-    CWindowOverridableVar<bool> forceNoBlur           = false;
-    CWindowOverridableVar<bool> forceOpaque           = false;
-    CWindowOverridableVar<bool> forceOpaqueOverridden = false; // if true, a rule will not change the forceOpaque state. This is for the force opaque dispatcher.
-    CWindowOverridableVar<bool> forceAllowsInput      = false;
-    CWindowOverridableVar<bool> forceNoAnims          = false;
-    CWindowOverridableVar<bool> forceNoBorder         = false;
-    CWindowOverridableVar<bool> forceNoShadow         = false;
-    CWindowOverridableVar<bool> forceNoDim            = false;
-    CWindowOverridableVar<bool> noFocus               = false;
-    CWindowOverridableVar<bool> windowDanceCompat     = false;
-    CWindowOverridableVar<bool> noMaxSize             = false;
-    CWindowOverridableVar<bool> dimAround             = false;
-    CWindowOverridableVar<bool> forceRGBX             = false;
-    CWindowOverridableVar<bool> keepAspectRatio       = false;
-    CWindowOverridableVar<int>  xray                  = -1; // -1 means unset, takes precedence over the renderdata one
-    CWindowOverridableVar<int>  borderSize            = -1; // -1 means unset, takes precedence over the renderdata one
-    CWindowOverridableVar<bool> forceTearing          = false;
-    CWindowOverridableVar<bool> nearestNeighbor       = false;
+    std::string                     animationStyle        = std::string("");
+    CWindowOverridableVar<int>      rounding              = -1; // -1 means no
+    CWindowOverridableVar<bool>     forceNoBlur           = false;
+    CWindowOverridableVar<bool>     forceOpaque           = false;
+    CWindowOverridableVar<bool>     forceOpaqueOverridden = false; // if true, a rule will not change the forceOpaque state. This is for the force opaque dispatcher.
+    CWindowOverridableVar<bool>     forceAllowsInput      = false;
+    CWindowOverridableVar<bool>     forceNoAnims          = false;
+    CWindowOverridableVar<bool>     forceNoBorder         = false;
+    CWindowOverridableVar<bool>     forceNoShadow         = false;
+    CWindowOverridableVar<bool>     forceNoDim            = false;
+    CWindowOverridableVar<bool>     noFocus               = false;
+    CWindowOverridableVar<bool>     windowDanceCompat     = false;
+    CWindowOverridableVar<bool>     noMaxSize             = false;
+    CWindowOverridableVar<Vector2D> maxSize               = Vector2D(std::numeric_limits<double>::max(), std::numeric_limits<double>::max());
+    CWindowOverridableVar<Vector2D> minSize               = Vector2D(20, 20);
+    CWindowOverridableVar<bool>     dimAround             = false;
+    CWindowOverridableVar<bool>     forceRGBX             = false;
+    CWindowOverridableVar<bool>     keepAspectRatio       = false;
+    CWindowOverridableVar<int>      xray                  = -1; // -1 means unset, takes precedence over the renderdata one
+    CWindowOverridableVar<int>      borderSize            = -1; // -1 means unset, takes precedence over the renderdata one
+    CWindowOverridableVar<bool>     forceTearing          = false;
+    CWindowOverridableVar<bool>     nearestNeighbor       = false;
 };
 
 struct SWindowRule {
@@ -193,7 +196,6 @@ class CWindow {
     DYNLISTENER(setTitleWindow);
     DYNLISTENER(setGeometryX11U);
     DYNLISTENER(fullscreenWindow);
-    DYNLISTENER(newPopupXDG);
     DYNLISTENER(requestMove);
     DYNLISTENER(requestMinimize);
     DYNLISTENER(requestMaximize);
@@ -209,8 +211,7 @@ class CWindow {
     DYNLISTENER(ackConfigure);
     // DYNLISTENER(newSubsurfaceWindow);
 
-    CWLSurface            m_pWLSurface;
-    std::list<CWLSurface> m_lPopupSurfaces;
+    CWLSurface m_pWLSurface;
 
     union {
         wlr_xdg_surface*      xdg;
@@ -222,8 +223,8 @@ class CWindow {
     Vector2D m_vSize     = Vector2D(0, 0);
 
     // this is the real position and size used to draw the thing
-    CAnimatedVariable m_vRealPosition;
-    CAnimatedVariable m_vRealSize;
+    CAnimatedVariable<Vector2D> m_vRealPosition;
+    CAnimatedVariable<Vector2D> m_vRealSize;
 
     // for not spamming the protocols
     Vector2D                                     m_vReportedPosition;
@@ -276,18 +277,20 @@ class CWindow {
     bool m_bWantsInitialFullscreen = false;
 
     // bitfield eSuppressEvents
-    uint64_t          m_eSuppressedEvents = SUPPRESS_NONE;
+    uint64_t m_eSuppressedEvents = SUPPRESS_NONE;
 
-    SSurfaceTreeNode* m_pSurfaceTree = nullptr;
+    // desktop components
+    std::unique_ptr<CSubsurface> m_pSubsurfaceHead;
+    std::unique_ptr<CPopup>      m_pPopupHead;
 
     // Animated border
-    CGradientValueData m_cRealBorderColor         = {0};
-    CGradientValueData m_cRealBorderColorPrevious = {0};
-    CAnimatedVariable  m_fBorderFadeAnimationProgress;
-    CAnimatedVariable  m_fBorderAngleAnimationProgress;
+    CGradientValueData       m_cRealBorderColor         = {0};
+    CGradientValueData       m_cRealBorderColorPrevious = {0};
+    CAnimatedVariable<float> m_fBorderFadeAnimationProgress;
+    CAnimatedVariable<float> m_fBorderAngleAnimationProgress;
 
     // Fade in-out
-    CAnimatedVariable        m_fAlpha;
+    CAnimatedVariable<float> m_fAlpha;
     bool                     m_bFadingOut     = false;
     bool                     m_bReadyToDelete = false;
     Vector2D                 m_vOriginalClosedPos;  // these will be used for calculations later on in
@@ -321,13 +324,13 @@ class CWindow {
     std::vector<std::unique_ptr<IWindowTransformer>> m_vTransformers;
 
     // for alpha
-    CAnimatedVariable m_fActiveInactiveAlpha;
+    CAnimatedVariable<float> m_fActiveInactiveAlpha;
 
     // animated shadow color
-    CAnimatedVariable m_cRealShadowColor;
+    CAnimatedVariable<CColor> m_cRealShadowColor;
 
     // animated tint
-    CAnimatedVariable m_fDimPercent;
+    CAnimatedVariable<float> m_fDimPercent;
 
     // swallowing
     CWindow* m_pSwallowed = nullptr;
@@ -392,6 +395,7 @@ class CWindow {
     bool                     canBeTorn();
     bool                     shouldSendFullscreenState();
     void                     setSuspended(bool suspend);
+    bool                     visibleOnMonitor(CMonitor* pMonitor);
 
     int                      getRealBorderSize();
     void                     updateSpecialRenderData();

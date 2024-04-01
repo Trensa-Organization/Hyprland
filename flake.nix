@@ -12,8 +12,14 @@
       host = "gitlab.freedesktop.org";
       owner = "wlroots";
       repo = "wlroots";
-      rev = "0cb091f1a2d345f37d2ee445f4ffd04f7f4ec9e5";
+      rev = "50eae512d9cecbf0b3b1898bb1f0b40fa05fe19b";
       flake = false;
+    };
+
+    hyprcursor = {
+      url = "github:hyprwm/hyprcursor";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.systems.follows = "systems";
     };
 
     hyprland-protocols = {
@@ -71,9 +77,9 @@
         # hyprland-packages
         
         hyprland
-        hyprland-unwrapped
         hyprland-debug
         hyprland-legacy-renderer
+        hyprland-unwrapped
         # hyprland-extras
         
         xdg-desktop-portal-hyprland
@@ -91,7 +97,7 @@
           stdenv = pkgsFor.${system}.gcc13Stdenv;
         } {
           name = "hyprland-shell";
-          nativeBuildInputs = with pkgsFor.${system}; [cmake python3];
+          nativeBuildInputs = with pkgsFor.${system}; [cmake python3 expat libxml2];
           buildInputs = [self.packages.${system}.wlroots-hyprland];
           hardeningDisable = ["fortify"];
           inputsFrom = [

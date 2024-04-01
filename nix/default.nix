@@ -8,6 +8,7 @@
   binutils,
   cairo,
   git,
+  hyprcursor,
   hyprland-protocols,
   hyprlang,
   jq,
@@ -75,6 +76,7 @@ assert lib.assertMsg (!hidpiXWayland) "The option `hidpiXWayland` has been remov
       [
         cairo
         git
+        hyprcursor.dev
         hyprland-protocols
         hyprlang
         libdrm
@@ -132,6 +134,7 @@ assert lib.assertMsg (!hidpiXWayland) "The option `hidpiXWayland` has been remov
 
     postInstall = ''
       ln -s ${wlroots}/include/wlr $dev/include/hyprland/wlroots
+
       ${lib.optionalString wrapRuntimeDeps ''
         wrapProgram $out/bin/Hyprland \
           --suffix PATH : ${lib.makeBinPath [
